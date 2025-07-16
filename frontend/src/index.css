@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 100% 22%; /* #0d206c */
+    --foreground: 0 0% 100%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 20%; /* Texto oscuro en tarjetas blancas */
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 20%; /* Texto oscuro en popovers */
+    --primary: 220 100% 22%; /* #0d206c */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 45 100% 58%; /* #ffab2d */
+    --secondary-foreground: 220 100% 22%;
+    --muted: 220 60% 95%;
+    --muted-foreground: 0 0% 40%; /* Texto gris oscuro */
+    --accent: 220 70% 55%; /* #447cd7 */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 60% 90%;
+    --input: 220 60% 90%;
+    --ring: 220 100% 22%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 220 100% 22%; /* #0d206c */
+    --foreground: 0 0% 100%;
+    --card: 220 90% 25%;
+    --card-foreground: 0 0% 100%;
+    --popover: 220 90% 25%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 220 70% 55%; /* #447cd7 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 45 100% 58%; /* #ffab2d */
+    --secondary-foreground: 220 100% 22%;
+    --muted: 220 80% 30%;
+    --muted-foreground: 220 60% 80%;
+    --accent: 45 100% 58%; /* #ffab2d */
+    --accent-foreground: 220 100% 22%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 80% 30%;
+    --input: 220 80% 30%;
+    --ring: 220 70% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  /* Solo el texto de las tablas debe ser negro */
+  table {
+    color: hsl(0 0% 20%) !important;
+  }
+
+  th,
+  td {
+    color: hsl(0 0% 20%) !important;
+  }
+
+  /* Texto de datos en tarjetas blancas - solo en la sección de datos */
+  .bg-card .text-foreground {
+    color: hsl(0 0% 20%) !important;
+  }
+
+  /* Texto muted pero visible solo en tablas */
+  .bg-card .text-muted-foreground {
+    color: hsl(0 0% 40%) !important;
+  }
+
+  /* Mantener texto blanco en el header */
+  .bg-primary\/10 .text-foreground {
+    color: hsl(0 0% 100%) !important;
+  }
+
+  .bg-primary\/10 .text-muted-foreground {
+    color: hsl(0 0% 100%) !important;
+  }
+
+  /* Texto del header principal */
+  .text-4xl.font-bold {
+    color: hsl(0 0% 100%) !important;
+  }
+
+  /* Texto en los selectores - mantener blanco */
+  .bg-card .SelectTrigger {
+    color: hsl(0 0% 100%) !important;
+  }
+
+  .bg-card .SelectValue {
+    color: hsl(0 0% 100%) !important;
+  }
+
+  /* Labels de los selectores - mantener blanco */
+  .bg-card label {
+    color: hsl(0 0% 100%) !important;
+  }
+}
