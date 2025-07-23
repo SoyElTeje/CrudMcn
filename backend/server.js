@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const fs = require("fs");
 const { getPool } = require("./db");
 const {
   router: authRoutes,
@@ -13,6 +14,11 @@ const {
   requireDeletePermission,
   requireCreatePermission,
 } = require("./middleware/auth");
+
+// Importar middleware de upload y servicio de Excel
+const upload = require("./middleware/upload");
+const excelService = require("./services/excelService");
+
 require("dotenv").config();
 
 const app = express();
@@ -539,6 +545,115 @@ app.delete(
       console.error("Error deleting multiple records:", error);
       res.status(500).json({
         error: "Failed to delete records",
+        details: error.message,
+      });
+    }
+  }
+);
+
+// Ruta para importar datos desde Excel
+app.post(
+  "/api/databases/:dbName/tables/:tableName/import-excel",
+  authenticateToken,
+  requireWritePermission,
+  upload.single("excelFile"),
+  async (req, res) => {
+    try {
+      const { dbName, tableName } = req.params;
+
+      if (!req.file) {
+        return res.status(400).json({
+          error: "No se ha proporcionado ningún archivo Excel",
+        });
+      }
+
+      console.log(
+        `📊 Procesando importación de Excel para ${dbName}.${tableName}`
+      );
+      console.log(`📁 Archivo: ${req.file.originalname}`);
+
+      // Procesar la importación
+      const result = await excelService.processExcelImport(
+        req.file.path,
+        dbName,
+        tableName
+      );
+
+      res.json({
+        success: true,
+        message: `Importación completada: ${result.successCount} registros insertados, ${result.errorCount} errores`,
+        data: {
+          totalRows: result.totalRows,
+          successCount: result.successCount,
+          errorCount: result.errorCount,
+          headers: result.headers,
+          errors: result.errors,
+        },
+      });
+    } catch (error) {
+      console.error("Error importing Excel data:", error);
+      res.status(500).json({
+        error: "Error al importar datos desde Excel",
+        details: error.message,
+      });
+    }
+  }
+);
+
+// Ruta para obtener una vista previa del archivo Excel
+app.post(
+  "/api/databases/:dbName/tables/:tableName/preview-excel",
+  authenticateToken,
+  requireReadPermission,
+  upload.single("excelFile"),
+  async (req, res) => {
+    try {
+      const { dbName, tableName } = req.params;
+
+      if (!req.file) {
+        return res.status(400).json({
+          error: "No se ha proporcionado ningún archivo Excel",
+        });
+      }
+
+      // Leer el archivo Excel sin insertar
+      const excelData = await excelService.readExcelFile(req.file.path);
+
+      // Validar columnas
+      const validation = await excelService.validateColumns(
+        dbName,
+        tableName,
+        excelData.headers
+      );
+
+      // Limpiar archivo temporal
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+
+      res.json({
+        success: true,
+        data: {
+          headers: excelData.headers,
+          totalRows: excelData.totalRows,
+          previewRows: excelData.rows.slice(0, 5), // Mostrar solo las primeras 5 filas
+          validation: {
+            tableColumns: validation.tableColumns,
+            insertableColumns: validation.insertableColumns,
+            identityColumns: validation.identityColumns,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Error previewing Excel file:", error);
+
+      // Limpiar archivo temporal en caso de error
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+
+      res.status(500).json({
+        error: "Error al previsualizar archivo Excel",
         details: error.message,
       });
     }
