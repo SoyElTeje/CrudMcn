@@ -339,11 +339,6 @@ export function AddRecordModal({
                       (Opcional)
                     </span>
                   )}
-                  {hasCheckConstraints && (
-                    <span className="text-xs text-orange-600 ml-2">
-                      (Valores permitidos: {allowedValues.join(", ")})
-                    </span>
-                  )}
                 </label>
 
                 {hasCheckConstraints && allowedValues.length > 0 ? (
@@ -414,10 +409,9 @@ export function AddRecordModal({
           <div className="flex gap-3 pt-4">
             <Button
               type="button"
-              variant="outline"
               onClick={onClose}
               disabled={loading}
-              className="flex-1"
+              className="flex-1 bg-blue-400 hover:bg-blue-500 text-white border-0"
             >
               Cancelar
             </Button>

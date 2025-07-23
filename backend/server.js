@@ -8,6 +8,10 @@ const {
   requireAdmin,
 } = require("./routes/auth");
 
+const logsRoutes = require("./routes/logs");
+
+const logService = require("./services/logService");
+
 const {
   requireReadPermission,
   requireWritePermission,
@@ -37,6 +41,9 @@ app.use(express.json());
 
 // Rutas de autenticación (sin middleware de autenticación)
 app.use("/api/auth", authRoutes);
+
+// Rutas de logs
+app.use("/api/logs", logsRoutes);
 
 // Trial endpoint
 app.get("/api/trial/table", async (req, res) => {
@@ -71,18 +78,61 @@ app.get("/api/trial/table", async (req, res) => {
   }
 });
 
-// List all databases
+// List accessible databases for the user
 app.get("/api/databases", authenticateToken, async (req, res) => {
   try {
+    // If user is admin, return all databases
+    if (req.user.isAdmin) {
+      const pool = await getPool();
+      const dbsResult = await pool
+        .request()
+        .query(
+          "SELECT name FROM sys.databases WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb')"
+        );
+      const dbs = dbsResult.recordset.map((row) => row.name);
+      res.json(dbs);
+      return;
+    }
+
+    // For non-admin users, get databases they have permissions for
     const pool = await getPool();
-    const dbsResult = await pool
+
+    // Get database permissions
+    const dbPermissionsQuery = `
+      SELECT DISTINCT DatabaseName 
+      FROM USER_DATABASE_PERMISSIONS 
+      WHERE UserId = @userId AND CanRead = 1
+    `;
+    const dbPermissionsResult = await pool
       .request()
-      .query(
-        "SELECT name FROM sys.databases WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb')"
-      );
-    const dbs = dbsResult.recordset.map((row) => row.name);
-    res.json(dbs);
+      .input("userId", req.user.id)
+      .query(dbPermissionsQuery);
+
+    // Get table permissions to find databases with table-specific permissions
+    const tablePermissionsQuery = `
+      SELECT DISTINCT DatabaseName 
+      FROM USER_TABLE_PERMISSIONS 
+      WHERE UserId = @userId AND CanRead = 1
+    `;
+    const tablePermissionsResult = await pool
+      .request()
+      .input("userId", req.user.id)
+      .query(tablePermissionsQuery);
+
+    // Combine both sets of databases
+    const accessibleDatabases = new Set();
+
+    dbPermissionsResult.recordset.forEach((row) => {
+      accessibleDatabases.add(row.DatabaseName);
+    });
+
+    tablePermissionsResult.recordset.forEach((row) => {
+      accessibleDatabases.add(row.DatabaseName);
+    });
+
+    res.json(Array.from(accessibleDatabases));
   } catch (error) {
+    console.error("Error fetching accessible databases:", error);
     res
       .status(500)
       .json({ error: "Failed to fetch databases", details: error.message });
@@ -335,6 +385,18 @@ app.post(
 
       const result = await request.query(query);
 
+      // Registrar log de inserción
+      await logService.logInsert(
+        req.user.id,
+        req.user.username,
+        dbName,
+        tableName,
+        record,
+        null, // recordId (se puede obtener después si es necesario)
+        req.ip,
+        req.get("User-Agent")
+      );
+
       res.json({
         success: true,
         message: "Record created successfully",
@@ -477,7 +539,29 @@ app.put(
         request.input(`where_${key}`, primaryKeyValues[key]);
       });
 
+      // Obtener datos anteriores para el log
+      const oldDataQuery = `SELECT * FROM [${tableName}] WHERE ${whereClause}`;
+      const oldDataRequest = pool.request();
+      primaryKeys.forEach((key) => {
+        oldDataRequest.input(`where_${key}`, primaryKeyValues[key]);
+      });
+      const oldDataResult = await oldDataRequest.query(oldDataQuery);
+      const oldData = oldDataResult.recordset[0];
+
       const result = await request.query(query);
+
+      // Registrar log de actualización
+      await logService.logUpdate(
+        req.user.id,
+        req.user.username,
+        dbName,
+        tableName,
+        oldData,
+        record,
+        JSON.stringify(primaryKeyValues), // recordId como string de los valores de PK
+        req.ip,
+        req.get("User-Agent")
+      );
 
       res.json({
         success: true,
@@ -608,7 +692,29 @@ app.delete(
         request.input(key, primaryKeyValues[key]);
       });
 
+      // Obtener datos anteriores para el log
+      const oldDataQuery = `SELECT * FROM [${tableName}] WHERE ${whereClause}`;
+      const oldDataRequest = pool.request();
+      primaryKeys.forEach((key) => {
+        oldDataRequest.input(key, primaryKeyValues[key]);
+      });
+      const oldDataResult = await oldDataRequest.query(oldDataQuery);
+      const oldData = oldDataResult.recordset[0];
+
       const result = await request.query(query);
+
+      // Registrar log de eliminación
+      await logService.logDelete(
+        req.user.id,
+        req.user.username,
+        dbName,
+        tableName,
+        oldData,
+        JSON.stringify(primaryKeyValues), // recordId como string de los valores de PK
+        1, // affectedRows
+        req.ip,
+        req.get("User-Agent")
+      );
 
       res.json({
         success: true,
@@ -665,6 +771,7 @@ app.delete(
       }
 
       let totalAffectedRows = 0;
+      const deletedRecords = [];
 
       // Delete each record individually using transactions for safety
       for (const record of records) {
@@ -672,6 +779,19 @@ app.delete(
         const whereClause = primaryKeys
           .map((key) => `[${key}] = @${key}`)
           .join(" AND ");
+
+        // Obtener datos anteriores para el log
+        const oldDataQuery = `SELECT * FROM [${tableName}] WHERE ${whereClause}`;
+        const oldDataRequest = pool.request();
+        primaryKeys.forEach((key) => {
+          oldDataRequest.input(key, record[key]);
+        });
+        const oldDataResult = await oldDataRequest.query(oldDataQuery);
+        const oldData = oldDataResult.recordset[0];
+
+        if (oldData) {
+          deletedRecords.push(oldData);
+        }
 
         const query = `DELETE FROM [${tableName}] WHERE ${whereClause}`;
 
@@ -684,6 +804,21 @@ app.delete(
 
         const result = await request.query(query);
         totalAffectedRows += result.rowsAffected[0];
+      }
+
+      // Registrar log de eliminación múltiple
+      if (deletedRecords.length > 0) {
+        await logService.logDelete(
+          req.user.id,
+          req.user.username,
+          dbName,
+          tableName,
+          deletedRecords,
+          null, // recordId
+          totalAffectedRows,
+          req.ip,
+          req.get("User-Agent")
+        );
       }
 
       res.json({
@@ -729,6 +864,20 @@ app.post(
         dbName,
         tableName
       );
+
+      // Registrar log de importación de Excel
+      if (result.successCount > 0) {
+        await logService.logInsert(
+          req.user.id,
+          req.user.username,
+          dbName,
+          tableName,
+          { importType: "Excel", fileName: req.file.originalname },
+          null, // recordId
+          req.ip,
+          req.get("User-Agent")
+        );
+      }
 
       res.json({
         success: true,
@@ -840,6 +989,17 @@ app.get(
         exportType,
         limit,
         offset
+      );
+
+      // Registrar log de exportación de Excel
+      await logService.logExport(
+        req.user.id,
+        req.user.username,
+        dbName,
+        tableName,
+        result.recordCount || 0,
+        req.ip,
+        req.get("User-Agent")
       );
 
       // Enviar el archivo como respuesta

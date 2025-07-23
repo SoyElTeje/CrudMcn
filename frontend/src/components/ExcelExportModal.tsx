@@ -126,14 +126,20 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-background border border-border/50 rounded-xl p-6 w-full max-w-md mx-4 shadow-xl">
+      <div className="bg-white border border-gray-300 rounded-xl p-6 w-full max-w-md mx-4 shadow-xl">
+        {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-foreground">
-            Exportar a Excel
-          </h2>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">
+              Exportar a Excel
+            </h2>
+            <p className="text-sm text-gray-600 mt-1">
+              {databaseName}.{tableName}
+            </p>
+          </div>
           <button
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground transition-colors"
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
           >
             <svg
               className="w-5 h-5"
@@ -151,13 +157,15 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
           </button>
         </div>
 
-        <div className="space-y-4">
+        {/* Content */}
+        <div className="space-y-6">
+          {/* Export Type Selection */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
+            <h3 className="text-sm font-medium text-gray-900 mb-3">
               Tipo de Exportación
-            </label>
-            <div className="space-y-2">
-              <label className="flex items-center space-x-3 cursor-pointer">
+            </h3>
+            <div className="space-y-3">
+              <label className="flex items-start space-x-3 cursor-pointer p-3 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors">
                 <input
                   type="radio"
                   value="all"
@@ -165,19 +173,17 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
                   onChange={(e) =>
                     setExportType(e.target.value as "all" | "current_page")
                   }
-                  className="w-4 h-4 text-primary bg-background border-border/50 focus:ring-primary/50"
+                  className="w-4 h-4 text-blue-600 bg-white border-gray-300 focus:ring-blue-500 mt-0.5"
                 />
-                <div>
-                  <div className="font-medium text-foreground">
-                    Toda la tabla
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Exportar todos los registros
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900">Toda la tabla</div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    Exportar todos los registros disponibles
                   </div>
                 </div>
               </label>
 
-              <label className="flex items-center space-x-3 cursor-pointer">
+              <label className="flex items-start space-x-3 cursor-pointer p-3 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors">
                 <input
                   type="radio"
                   value="current_page"
@@ -185,13 +191,11 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
                   onChange={(e) =>
                     setExportType(e.target.value as "all" | "current_page")
                   }
-                  className="w-4 h-4 text-primary bg-background border-border/50 focus:ring-primary/50"
+                  className="w-4 h-4 text-blue-600 bg-white border-gray-300 focus:ring-blue-500 mt-0.5"
                 />
-                <div>
-                  <div className="font-medium text-foreground">
-                    Página actual
-                  </div>
-                  <div className="text-sm text-muted-foreground">
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900">Página actual</div>
+                  <div className="text-sm text-gray-600 mt-1">
                     Exportar solo los registros visibles
                   </div>
                 </div>
@@ -199,20 +203,20 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
             </div>
           </div>
 
-          <div className="bg-muted/20 rounded-lg p-3">
-            <div className="text-sm text-muted-foreground mb-1">
-              Descripción:
-            </div>
-            <div className="text-sm text-foreground font-medium">
+          {/* Description */}
+          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <div className="text-sm text-gray-600 mb-2">Descripción:</div>
+            <div className="text-sm text-gray-900 font-medium">
               {getExportDescription()}
             </div>
           </div>
 
+          {/* Error Message */}
           {error && (
-            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <div className="flex items-start gap-2">
                 <svg
-                  className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0"
+                  className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -224,23 +228,23 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
                     d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                   />
                 </svg>
-                <div className="text-sm text-destructive">{error}</div>
+                <div className="text-sm text-red-700">{error}</div>
               </div>
             </div>
           )}
 
-          <div className="flex gap-3 pt-4">
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-2">
             <Button
               onClick={onClose}
-              variant="outline"
-              className="flex-1"
+              className="flex-1 bg-blue-400 hover:bg-blue-500 text-white border-0"
               disabled={isExporting}
             >
               Cancelar
             </Button>
             <Button
               onClick={handleExport}
-              className="flex-1 bg-green-600 hover:bg-green-700"
+              className="flex-1 bg-blue-800 hover:bg-blue-900 text-white"
               disabled={isExporting}
             >
               {isExporting ? (

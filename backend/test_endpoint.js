@@ -1,112 +1,43 @@
 const axios = require("axios");
-const authService = require("./services/authService");
+
+const BASE_URL = "http://localhost:3001";
 
 async function testEndpoint() {
+  console.log("🧪 Probando endpoint HTTP directamente...\n");
+
   try {
-    console.log("🧪 Probando endpoint HTTP completo...");
-
-    // 1. Obtener token de admin
-    const user = await authService.verifyCredentials("admin", "admin");
-    if (!user) {
-      console.log("❌ Login fallido");
-      return;
-    }
-
-    const token = authService.generateToken(user);
-    console.log("✅ Token generado");
-
-    // 2. Configurar axios con el token
-    const api = axios.create({
-      baseURL: "http://localhost:3001",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+    // 1. Login como admin
+    console.log("1️⃣ Login como admin...");
+    const adminLoginResponse = await axios.post(`${BASE_URL}/api/auth/login`, {
+      username: "admin",
+      password: "admin",
     });
+    const adminToken = adminLoginResponse.data.token;
+    console.log("✅ Login admin exitoso");
 
-    // 3. Probar endpoint de registros
-    const dbName = "BD_ABM1";
-    const tableName = "Maquinas";
-
-    console.log(
-      `\n📋 Probando endpoint: GET /api/databases/${dbName}/tables/${tableName}/records`
+    // 2. Probar endpoint de permisos para user2 (ID: 3)
+    console.log("\n2️⃣ Probando endpoint /api/auth/users/3/permissions...");
+    const permissionsResponse = await axios.get(
+      `${BASE_URL}/api/auth/users/3/permissions`,
+      {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      }
     );
+    console.log("📋 Respuesta del endpoint:");
+    console.log(JSON.stringify(permissionsResponse.data, null, 2));
 
-    try {
-      const response = await api.get(
-        `/api/databases/${dbName}/tables/${tableName}/records`,
-        {
-          params: {
-            limit: 10,
-            offset: 0,
-          },
-        }
-      );
+    // 3. Verificar el status code
+    console.log(`\n3️⃣ Status code: ${permissionsResponse.status}`);
 
-      console.log("✅ Respuesta exitosa:");
-      console.log(`  - Status: ${response.status}`);
-      console.log(`  - Database: ${response.data.database}`);
-      console.log(`  - Table: ${response.data.table}`);
-      console.log(`  - Count: ${response.data.count}`);
-      console.log(`  - Records: ${response.data.data.length}`);
-
-      if (response.data.data.length > 0) {
-        console.log("📊 Primer registro:");
-        const firstRecord = response.data.data[0];
-        Object.keys(firstRecord)
-          .slice(0, 5)
-          .forEach((key) => {
-            console.log(`    ${key}: ${firstRecord[key]}`);
-          });
-      }
-    } catch (error) {
-      console.error("❌ Error en la petición HTTP:");
-      if (error.response) {
-        console.error(`  - Status: ${error.response.status}`);
-        console.error(`  - Data:`, error.response.data);
-      } else {
-        console.error(`  - Error: ${error.message}`);
-      }
-    }
-
-    // 4. Probar otra tabla
-    const tableName2 = "Funcionario";
-    console.log(
-      `\n📋 Probando endpoint: GET /api/databases/${dbName}/tables/${tableName2}/records`
-    );
-
-    try {
-      const response = await api.get(
-        `/api/databases/${dbName}/tables/${tableName2}/records`,
-        {
-          params: {
-            limit: 10,
-            offset: 0,
-          },
-        }
-      );
-
-      console.log("✅ Respuesta exitosa:");
-      console.log(`  - Status: ${response.status}`);
-      console.log(`  - Database: ${response.data.database}`);
-      console.log(`  - Table: ${response.data.table}`);
-      console.log(`  - Count: ${response.data.count}`);
-      console.log(`  - Records: ${response.data.data.length}`);
-    } catch (error) {
-      console.error("❌ Error en la petición HTTP:");
-      if (error.response) {
-        console.error(`  - Status: ${error.response.status}`);
-        console.error(`  - Data:`, error.response.data);
-      } else {
-        console.error(`  - Error: ${error.message}`);
-      }
-    }
-
-    console.log("\n✅ Pruebas completadas");
+    console.log("\n🎉 Prueba del endpoint completada!");
   } catch (error) {
-    console.error("❌ Error en las pruebas:", error);
-  } finally {
-    process.exit(0);
+    console.error(
+      "❌ Error en la prueba:",
+      error.response?.data || error.message
+    );
+    if (error.response) {
+      console.log(`Status code: ${error.response.status}`);
+    }
   }
 }
 

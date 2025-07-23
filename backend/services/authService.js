@@ -308,11 +308,11 @@ class AuthService {
 
       switch (operation) {
         case "read":
-          return permission.CanRead === 1;
+          return permission.CanRead === 1 || permission.CanRead === true;
         case "write":
-          return permission.CanWrite === 1;
+          return permission.CanWrite === 1 || permission.CanWrite === true;
         case "delete":
-          return permission.CanDelete === 1;
+          return permission.CanDelete === 1 || permission.CanDelete === true;
         default:
           return false;
       }
@@ -389,11 +389,11 @@ class AuthService {
 
       switch (operation) {
         case "read":
-          return permission.CanRead === 1;
+          return permission.CanRead === 1 || permission.CanRead === true;
         case "write":
-          return permission.CanWrite === 1;
+          return permission.CanWrite === 1 || permission.CanWrite === true;
         case "delete":
-          return permission.CanDelete === 1;
+          return permission.CanDelete === 1 || permission.CanDelete === true;
         default:
           return false;
       }
@@ -511,16 +511,16 @@ class AuthService {
       return {
         databasePermissions: databasePermissionsResult.recordset.map((p) => ({
           databaseName: p.DatabaseName,
-          canRead: p.CanRead === 1,
-          canWrite: p.CanWrite === 1,
-          canDelete: p.CanDelete === 1,
+          canRead: p.CanRead === 1 || p.CanRead === true,
+          canWrite: p.CanWrite === 1 || p.CanWrite === true,
+          canDelete: p.CanDelete === 1 || p.CanDelete === true,
         })),
         tablePermissions: tablePermissionsResult.recordset.map((p) => ({
           databaseName: p.DatabaseName,
           tableName: p.TableName,
-          canRead: p.CanRead === 1,
-          canWrite: p.CanWrite === 1,
-          canDelete: p.CanDelete === 1,
+          canRead: p.CanRead === 1 || p.CanRead === true,
+          canWrite: p.CanWrite === 1 || p.CanWrite === true,
+          canDelete: p.CanDelete === 1 || p.CanDelete === true,
         })),
       };
     } catch (error) {
