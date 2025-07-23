@@ -37,6 +37,20 @@ export default {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+        // Colores de la marca
+        brand: {
+          blue: {
+            dark: "#0d206c",
+            DEFAULT: "#447cd7",
+            light: "#6b9be8",
+            lighter: "#a3c4f3",
+          },
+          orange: {
+            DEFAULT: "#eea92d",
+            light: "#f2c266",
+            dark: "#d4941a",
+          },
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

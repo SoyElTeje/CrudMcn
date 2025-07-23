@@ -106,4 +106,24 @@
   .bg-card label {
     color: hsl(0 0% 100%) !important;
   }
+
+  /* Estilos para el selector de registros por página - texto oscuro */
+  .PageSizeSelector select {
+    color: #111827 !important;
+  }
+
+  .PageSizeSelector select option {
+    color: #111827 !important;
+    background-color: white !important;
+  }
+
+  /* Asegurar que todos los selects tengan texto oscuro cuando están en contenedores blancos */
+  .bg-white select {
+    color: #111827 !important;
+  }
+
+  .bg-white select option {
+    color: #111827 !important;
+    background-color: white !important;
+  }
 }
