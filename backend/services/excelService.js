@@ -181,9 +181,76 @@ class ExcelService {
           successCount++;
         } catch (error) {
           errorCount++;
+
+          // Detectar errores específicos de SQL Server
+          let errorMessage = error.message;
+          let errorType = "general";
+
+          if (error.message) {
+            const errorMsg = error.message.toLowerCase();
+
+            // Error de clave primaria duplicada
+            if (
+              errorMsg.includes("primary key") ||
+              errorMsg.includes("duplicate key") ||
+              errorMsg.includes("unique constraint") ||
+              errorMsg.includes("pk_")
+            ) {
+              errorMessage =
+                "Ya existe un registro con la misma clave primaria";
+              errorType = "primary_key_violation";
+            }
+            // Error de constraint de verificación (CHECK)
+            else if (
+              errorMsg.includes("check constraint") ||
+              errorMsg.includes("check_")
+            ) {
+              errorMessage =
+                "Los datos no cumplen con las restricciones de validación";
+              errorType = "check_constraint_violation";
+            }
+            // Error de clave foránea
+            else if (
+              errorMsg.includes("foreign key") ||
+              errorMsg.includes("fk_")
+            ) {
+              errorMessage =
+                "Los datos hacen referencia a un registro que no existe en otra tabla";
+              errorType = "foreign_key_violation";
+            }
+            // Error de NOT NULL
+            else if (
+              errorMsg.includes("cannot insert the value null") ||
+              errorMsg.includes("null value")
+            ) {
+              errorMessage =
+                "No se puede insertar un valor nulo en un campo requerido";
+              errorType = "null_violation";
+            }
+            // Error de tipo de dato
+            else if (
+              errorMsg.includes("conversion failed") ||
+              errorMsg.includes("data type")
+            ) {
+              errorMessage =
+                "El tipo de dato proporcionado no es compatible con el campo";
+              errorType = "data_type_violation";
+            }
+            // Error de longitud
+            else if (
+              errorMsg.includes("string or binary data would be truncated")
+            ) {
+              errorMessage =
+                "Los datos proporcionados exceden la longitud máxima permitida";
+              errorType = "length_violation";
+            }
+          }
+
           errors.push({
             row: i + 2, // +2 porque Excel empieza en 1 y la primera fila son encabezados
-            error: error.message,
+            error: errorMessage,
+            errorType: errorType,
+            originalError: error.message,
             data: row,
           });
         }
@@ -230,6 +297,80 @@ class ExcelService {
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
+      throw error;
+    }
+  }
+
+  // Función para exportar datos de una tabla a Excel
+  async exportTableToExcel(
+    databaseName,
+    tableName,
+    exportType = "all",
+    limit = null,
+    offset = null
+  ) {
+    try {
+      const pool = await getPool(databaseName);
+
+      // Construir la consulta según el tipo de exportación
+      let query;
+      let params = [];
+
+      if (exportType === "current_page" && limit !== null && offset !== null) {
+        // Exportar solo la página actual
+        query = `SELECT * FROM [${tableName}] ORDER BY (SELECT NULL) OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`;
+        params = [
+          { name: "offset", value: parseInt(offset) },
+          { name: "limit", value: parseInt(limit) },
+        ];
+      } else {
+        // Exportar toda la tabla
+        query = `SELECT * FROM [${tableName}]`;
+      }
+
+      // Ejecutar la consulta
+      const request = pool.request();
+      params.forEach((param) => {
+        request.input(param.name, param.value);
+      });
+
+      const result = await request.query(query);
+
+      if (result.recordset.length === 0) {
+        throw new Error("No hay datos para exportar");
+      }
+
+      // Crear el archivo Excel
+      const workbook = XLSX.utils.book_new();
+
+      // Convertir los datos a formato de hoja de cálculo
+      const worksheet = XLSX.utils.json_to_sheet(result.recordset);
+
+      // Agregar la hoja al libro
+      XLSX.utils.book_append_sheet(workbook, worksheet, tableName);
+
+      // Generar nombre de archivo único
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const fileName = `${tableName}_${exportType}_${timestamp}.xlsx`;
+      const filePath = `uploads/${fileName}`;
+
+      // Asegurar que el directorio existe
+      if (!fs.existsSync("uploads")) {
+        fs.mkdirSync("uploads", { recursive: true });
+      }
+
+      // Escribir el archivo
+      XLSX.writeFile(workbook, filePath);
+
+      return {
+        filePath,
+        fileName,
+        recordCount: result.recordset.length,
+        exportType,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error("Error exporting table to Excel:", error);
       throw error;
     }
   }

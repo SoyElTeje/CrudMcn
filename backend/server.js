@@ -236,6 +236,33 @@ app.get(
   }
 );
 
+// Get total count of records in a table
+app.get(
+  "/api/databases/:dbName/tables/:tableName/count",
+  authenticateToken,
+  requireReadPermission,
+  async (req, res) => {
+    try {
+      const { dbName, tableName } = req.params;
+
+      const pool = await getPool(dbName);
+      const result = await pool
+        .request()
+        .query(`SELECT COUNT(*) as count FROM [${tableName}]`);
+
+      res.json({
+        count: result.recordset[0].count,
+      });
+    } catch (error) {
+      console.error("Error fetching table count:", error);
+      res.status(500).json({
+        error: "Failed to fetch table count",
+        details: error.message,
+      });
+    }
+  }
+);
+
 // Create a new record in a table
 app.post(
   "/api/databases/:dbName/tables/:tableName/records",
@@ -315,8 +342,71 @@ app.post(
       });
     } catch (error) {
       console.error("Error creating record:", error);
-      res.status(500).json({
-        error: "Failed to create record",
+
+      // Detectar errores específicos de SQL Server
+      let errorMessage = "Error al crear el registro";
+      let errorType = "general";
+
+      if (error.message) {
+        const errorMsg = error.message.toLowerCase();
+
+        // Error de clave primaria duplicada
+        if (
+          errorMsg.includes("primary key") ||
+          errorMsg.includes("duplicate key") ||
+          errorMsg.includes("unique constraint") ||
+          errorMsg.includes("pk_")
+        ) {
+          errorMessage =
+            "Ya existe un registro con la misma clave primaria. Verifique que los valores de identificación sean únicos.";
+          errorType = "primary_key_violation";
+        }
+        // Error de constraint de verificación (CHECK)
+        else if (
+          errorMsg.includes("check constraint") ||
+          errorMsg.includes("check_")
+        ) {
+          errorMessage =
+            "Los datos no cumplen con las restricciones de validación de la tabla.";
+          errorType = "check_constraint_violation";
+        }
+        // Error de clave foránea
+        else if (errorMsg.includes("foreign key") || errorMsg.includes("fk_")) {
+          errorMessage =
+            "Los datos hacen referencia a un registro que no existe en otra tabla.";
+          errorType = "foreign_key_violation";
+        }
+        // Error de NOT NULL
+        else if (
+          errorMsg.includes("cannot insert the value null") ||
+          errorMsg.includes("null value")
+        ) {
+          errorMessage =
+            "No se puede insertar un valor nulo en un campo requerido.";
+          errorType = "null_violation";
+        }
+        // Error de tipo de dato
+        else if (
+          errorMsg.includes("conversion failed") ||
+          errorMsg.includes("data type")
+        ) {
+          errorMessage =
+            "El tipo de dato proporcionado no es compatible con el campo.";
+          errorType = "data_type_violation";
+        }
+        // Error de longitud
+        else if (
+          errorMsg.includes("string or binary data would be truncated")
+        ) {
+          errorMessage =
+            "Los datos proporcionados exceden la longitud máxima permitida para el campo.";
+          errorType = "length_violation";
+        }
+      }
+
+      res.status(400).json({
+        error: errorMessage,
+        errorType: errorType,
         details: error.message,
       });
     }
@@ -396,8 +486,69 @@ app.put(
       });
     } catch (error) {
       console.error("Error updating record:", error);
-      res.status(500).json({
-        error: "Failed to update record",
+
+      // Detectar errores específicos de SQL Server
+      let errorMessage = "Error al actualizar el registro";
+      let errorType = "general";
+
+      if (error.message) {
+        const errorMsg = error.message.toLowerCase();
+
+        // Error de constraint de verificación (CHECK)
+        if (
+          errorMsg.includes("check constraint") ||
+          errorMsg.includes("check_")
+        ) {
+          errorMessage =
+            "Los datos no cumplen con las restricciones de validación de la tabla.";
+          errorType = "check_constraint_violation";
+        }
+        // Error de clave foránea
+        else if (errorMsg.includes("foreign key") || errorMsg.includes("fk_")) {
+          errorMessage =
+            "Los datos hacen referencia a un registro que no existe en otra tabla.";
+          errorType = "foreign_key_violation";
+        }
+        // Error de NOT NULL
+        else if (
+          errorMsg.includes("cannot insert the value null") ||
+          errorMsg.includes("null value")
+        ) {
+          errorMessage =
+            "No se puede actualizar con un valor nulo en un campo requerido.";
+          errorType = "null_violation";
+        }
+        // Error de tipo de dato
+        else if (
+          errorMsg.includes("conversion failed") ||
+          errorMsg.includes("data type")
+        ) {
+          errorMessage =
+            "El tipo de dato proporcionado no es compatible con el campo.";
+          errorType = "data_type_violation";
+        }
+        // Error de longitud
+        else if (
+          errorMsg.includes("string or binary data would be truncated")
+        ) {
+          errorMessage =
+            "Los datos proporcionados exceden la longitud máxima permitida para el campo.";
+          errorType = "length_violation";
+        }
+        // Error de registro no encontrado
+        else if (
+          errorMsg.includes("0 rows affected") ||
+          errorMsg.includes("no rows affected")
+        ) {
+          errorMessage =
+            "No se encontró el registro especificado para actualizar.";
+          errorType = "record_not_found";
+        }
+      }
+
+      res.status(400).json({
+        error: errorMessage,
+        errorType: errorType,
         details: error.message,
       });
     }
@@ -654,6 +805,60 @@ app.post(
 
       res.status(500).json({
         error: "Error al previsualizar archivo Excel",
+        details: error.message,
+      });
+    }
+  }
+);
+
+// Ruta para exportar datos de una tabla a Excel
+app.get(
+  "/api/databases/:dbName/tables/:tableName/export-excel",
+  authenticateToken,
+  requireReadPermission,
+  async (req, res) => {
+    try {
+      const { dbName, tableName } = req.params;
+      const { exportType = "all", limit, offset } = req.query;
+
+      console.log(
+        `📊 Exportando datos de ${dbName}.${tableName} - Tipo: ${exportType}`
+      );
+
+      // Validar parámetros
+      if (exportType === "current_page" && (!limit || !offset)) {
+        return res.status(400).json({
+          error:
+            "Para exportar la página actual, se requieren los parámetros 'limit' y 'offset'",
+        });
+      }
+
+      // Procesar la exportación
+      const result = await excelService.exportTableToExcel(
+        dbName,
+        tableName,
+        exportType,
+        limit,
+        offset
+      );
+
+      // Enviar el archivo como respuesta
+      res.download(result.filePath, result.fileName, (err) => {
+        // Limpiar el archivo después de enviarlo
+        if (fs.existsSync(result.filePath)) {
+          fs.unlinkSync(result.filePath);
+        }
+
+        if (err) {
+          console.error("Error sending file:", err);
+        } else {
+          console.log(`✅ Archivo exportado exitosamente: ${result.fileName}`);
+        }
+      });
+    } catch (error) {
+      console.error("Error exporting Excel data:", error);
+      res.status(500).json({
+        error: "Error al exportar datos a Excel",
         details: error.message,
       });
     }

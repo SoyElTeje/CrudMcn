@@ -22,6 +22,9 @@ import { DeleteConfirmationModal } from "./components/DeleteConfirmationModal";
 import { BulkDeleteConfirmationModal } from "./components/BulkDeleteConfirmationModal";
 import { LoginModal } from "./components/LoginModal";
 import { UserManagement } from "./components/UserManagement";
+import { ExcelImportModal } from "./components/ExcelImportModal";
+import { ExcelExportModal } from "./components/ExcelExportModal";
+import { Pagination } from "./components/Pagination";
 import "./App.css";
 
 interface TableInfo {
@@ -34,6 +37,10 @@ interface TableData {
   table: string;
   count: number;
   data: any[];
+  totalRecords?: number; // Total de registros en la tabla
+  currentPage?: number; // Página actual
+  totalPages?: number; // Total de páginas
+  recordsPerPage?: number; // Registros por página
 }
 
 interface TableStructure {
@@ -83,6 +90,20 @@ function App() {
   const [selectedRecords, setSelectedRecords] = useState<any[]>([]);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+
+  // Estados para importación de Excel
+  const [isExcelImportModalOpen, setIsExcelImportModalOpen] = useState(false);
+  const [importSuccessMessage, setImportSuccessMessage] = useState<
+    string | null
+  >(null);
+
+  // Estados para exportación de Excel
+  const [isExcelExportModalOpen, setIsExcelExportModalOpen] = useState(false);
+
+  // Estados para paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [recordsPerPage, setRecordsPerPage] = useState(5);
+  const [totalRecords, setTotalRecords] = useState(0);
 
   // Configurar axios con interceptor para token
   const api = axios.create({
@@ -180,11 +201,21 @@ function App() {
         }
       );
 
-      // Recargar los datos de la tabla
+      // Recargar los datos de la tabla con paginación actual
       const response = await api.get(
-        `/api/databases/${selectedDb}/tables/${selectedTable}/records`
+        `/api/databases/${selectedDb}/tables/${selectedTable}/records`,
+        {
+          params: {
+            limit: recordsPerPage,
+            offset: (currentPage - 1) * recordsPerPage,
+          },
+        }
       );
       setTableData(response.data);
+
+      // Actualizar el total de registros
+      const newTotal = await fetchTotalRecords(selectedDb, selectedTable);
+      setTotalRecords(newTotal);
 
       setIsAddModalOpen(false);
     } catch (error: any) {
@@ -215,9 +246,15 @@ function App() {
         }
       );
 
-      // Recargar los datos de la tabla
+      // Recargar los datos de la tabla con paginación actual
       const response = await api.get(
-        `/api/databases/${selectedDb}/tables/${selectedTable}/records`
+        `/api/databases/${selectedDb}/tables/${selectedTable}/records`,
+        {
+          params: {
+            limit: recordsPerPage,
+            offset: (currentPage - 1) * recordsPerPage,
+          },
+        }
       );
       setTableData(response.data);
 
@@ -256,11 +293,21 @@ function App() {
         }
       );
 
-      // Recargar los datos de la tabla
+      // Recargar los datos de la tabla con paginación actual
       const response = await api.get(
-        `/api/databases/${selectedDb}/tables/${selectedTable}/records`
+        `/api/databases/${selectedDb}/tables/${selectedTable}/records`,
+        {
+          params: {
+            limit: recordsPerPage,
+            offset: (currentPage - 1) * recordsPerPage,
+          },
+        }
       );
       setTableData(response.data);
+
+      // Actualizar el total de registros
+      const newTotal = await fetchTotalRecords(selectedDb, selectedTable);
+      setTotalRecords(newTotal);
 
       // Limpiar selección si el registro eliminado estaba seleccionado
       setSelectedRecords((prev) =>
@@ -312,7 +359,7 @@ function App() {
 
   // Función para confirmar eliminación múltiple
   const handleConfirmBulkDelete = async () => {
-    if (!selectedDb || !selectedTable || selectedRecords.length === 0) return;
+    if (!selectedDb || !selectedTable || !tableStructure) return;
 
     setBulkDeleteLoading(true);
     try {
@@ -323,19 +370,126 @@ function App() {
         }
       );
 
-      // Recargar los datos de la tabla
+      // Recargar los datos de la tabla con paginación actual
       const response = await api.get(
-        `/api/databases/${selectedDb}/tables/${selectedTable}/records`
+        `/api/databases/${selectedDb}/tables/${selectedTable}/records`,
+        {
+          params: {
+            limit: recordsPerPage,
+            offset: (currentPage - 1) * recordsPerPage,
+          },
+        }
       );
       setTableData(response.data);
 
+      // Actualizar el total de registros
+      const newTotal = await fetchTotalRecords(selectedDb, selectedTable);
+      setTotalRecords(newTotal);
+
       // Limpiar selección
       setSelectedRecords([]);
+
       setIsBulkDeleteModalOpen(false);
     } catch (error: any) {
       setError(error.response?.data?.error || error.message);
     } finally {
       setBulkDeleteLoading(false);
+    }
+  };
+
+  // Función para manejar la importación de Excel completada
+  const handleExcelImportComplete = async (result: any) => {
+    // Recargar los datos de la tabla
+    if (selectedDb && selectedTable) {
+      const response = await api.get(
+        `/api/databases/${selectedDb}/tables/${selectedTable}/records`,
+        {
+          params: {
+            limit: recordsPerPage,
+            offset: (currentPage - 1) * recordsPerPage,
+          },
+        }
+      );
+      setTableData(response.data);
+    }
+
+    // Mostrar mensaje de éxito
+    const message = `Importación exitosa: ${
+      result.insertedRows
+    } registros insertados${
+      result.skippedRows > 0 ? `, ${result.skippedRows} registros omitidos` : ""
+    }`;
+    setImportSuccessMessage(message);
+
+    // Ocultar mensaje después de 5 segundos
+    setTimeout(() => {
+      setImportSuccessMessage(null);
+    }, 5000);
+  };
+
+  // Función para obtener el total de registros en la tabla
+  const fetchTotalRecords = async (dbName: string, tableName: string) => {
+    try {
+      const response = await api.get(
+        `/api/databases/${dbName}/tables/${tableName}/count`
+      );
+      return response.data.count;
+    } catch (error) {
+      console.error("Error obteniendo total de registros:", error);
+      return 0;
+    }
+  };
+
+  // Función para cambiar de página
+  const handlePageChange = async (newPage: number) => {
+    if (!selectedDb || !selectedTable) return;
+
+    setCurrentPage(newPage);
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await api.get(
+        `/api/databases/${selectedDb}/tables/${selectedTable}/records`,
+        {
+          params: {
+            limit: recordsPerPage,
+            offset: (newPage - 1) * recordsPerPage,
+          },
+        }
+      );
+      setTableData(response.data);
+    } catch (error: any) {
+      setError(error.response?.data?.error || error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Función para cambiar registros por página
+  const handleRecordsPerPageChange = async (newRecordsPerPage: number) => {
+    if (!selectedDb || !selectedTable) return;
+
+    setRecordsPerPage(newRecordsPerPage);
+    setCurrentPage(1); // Volver a la primera página
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await api.get(
+        `/api/databases/${selectedDb}/tables/${selectedTable}/records`,
+        {
+          params: {
+            limit: newRecordsPerPage,
+            offset: 0,
+          },
+        }
+      );
+      setTableData(response.data);
+    } catch (error: any) {
+      setError(error.response?.data?.error || error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -371,21 +525,35 @@ function App() {
     ) {
       setLoading(true);
       setError(null);
+      setCurrentPage(1); // Reset a la primera página cuando cambia la tabla
 
-      // Obtener datos de la tabla y estructura en paralelo
+      // Obtener datos de la tabla, estructura y total de registros en paralelo
       Promise.all([
-        api.get(`/api/databases/${selectedDb}/tables/${selectedTable}/records`),
+        api.get(
+          `/api/databases/${selectedDb}/tables/${selectedTable}/records`,
+          {
+            params: {
+              limit: recordsPerPage,
+              offset: 0,
+            },
+          }
+        ),
         fetchTableStructure(selectedDb, selectedTable),
+        fetchTotalRecords(selectedDb, selectedTable),
       ])
-        .then(([tableResponse]) => setTableData(tableResponse.data))
+        .then(([tableResponse, , totalCount]) => {
+          setTableData(tableResponse.data);
+          setTotalRecords(totalCount);
+        })
         .catch((err) => setError(err.response?.data?.error || err.message))
         .finally(() => setLoading(false));
     } else {
       setTableData(null);
       setTableStructure(null);
       setError(null);
+      setTotalRecords(0);
     }
-  }, [selectedDb, selectedTable, isAuthenticated]);
+  }, [selectedDb, selectedTable, isAuthenticated, recordsPerPage]);
 
   // Render
   if (showLogin) {
@@ -448,6 +616,50 @@ function App() {
       </div>
 
       <div className="max-w-7xl mx-auto p-8">
+        {/* Mensaje de éxito de importación */}
+        {importSuccessMessage && (
+          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 animate-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <svg
+                  className="w-5 h-5 text-green-400 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+                <span className="text-green-800 font-medium">
+                  {importSuccessMessage}
+                </span>
+              </div>
+              <button
+                onClick={() => setImportSuccessMessage(null)}
+                className="text-green-600 hover:text-green-800"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
+
         {currentView === "users" ? (
           <UserManagement
             token={token!}
@@ -525,8 +737,40 @@ function App() {
 
               {error && (
                 <div className="flex items-center justify-center py-12">
-                  <div className="text-destructive bg-destructive/10 px-4 py-3 rounded-lg border border-destructive/20">
-                    <strong>Error:</strong> {error}
+                  <div className="max-w-md w-full">
+                    <div className="bg-destructive/10 px-6 py-4 rounded-lg border border-destructive/20">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0">
+                          <svg
+                            className="w-5 h-5 text-destructive mt-0.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-sm font-semibold text-destructive mb-1">
+                            Error de Operación
+                          </h3>
+                          <p className="text-sm text-foreground leading-relaxed">
+                            {error}
+                          </p>
+                          <button
+                            onClick={() => setError(null)}
+                            className="mt-3 text-xs text-destructive hover:text-destructive/80 underline"
+                          >
+                            Cerrar mensaje
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -545,25 +789,65 @@ function App() {
                             : "No hay registros en esta tabla"}
                         </p>
                       </div>
-                      <Button
-                        onClick={() => setIsAddModalOpen(true)}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        <svg
-                          className="w-4 h-4 mr-2"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
+                      <div className="flex gap-0">
+                        <Button
+                          onClick={() => setIsAddModalOpen(true)}
+                          className="bg-[#eea92d] hover:bg-[#d99a28] text-black border-r border-white/20 rounded-r-none"
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                          />
-                        </svg>
-                        Agregar Registro
-                      </Button>
+                          <svg
+                            className="w-4 h-4 mr-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                            />
+                          </svg>
+                          Agregar Registro
+                        </Button>
+                        <Button
+                          onClick={() => setIsExcelImportModalOpen(true)}
+                          className="bg-[#0d206c] hover:bg-[#0a1a5a] text-white border-r border-white/20 rounded-none"
+                        >
+                          <svg
+                            className="w-4 h-4 mr-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"
+                            />
+                          </svg>
+                          Importar Excel
+                        </Button>
+                        <Button
+                          onClick={() => setIsExcelExportModalOpen(true)}
+                          className="bg-[#0d206c] hover:bg-[#0a1a5a] text-white rounded-l-none"
+                        >
+                          <svg
+                            className="w-4 h-4 mr-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                            />
+                          </svg>
+                          Exportar Excel
+                        </Button>
+                      </div>
                     </div>
                   </div>
 
@@ -733,6 +1017,18 @@ function App() {
                           })}
                         </TableBody>
                       </Table>
+
+                      {/* Componente de paginación */}
+                      {totalRecords > 0 && (
+                        <Pagination
+                          currentPage={currentPage}
+                          totalPages={Math.ceil(totalRecords / recordsPerPage)}
+                          totalRecords={totalRecords}
+                          recordsPerPage={recordsPerPage}
+                          onPageChange={handlePageChange}
+                          onRecordsPerPageChange={handleRecordsPerPageChange}
+                        />
+                      )}
                     </div>
                   ) : (
                     <div className="flex items-center justify-center py-12">
@@ -836,6 +1132,28 @@ function App() {
           onConfirm={handleConfirmBulkDelete}
           selectedRecords={selectedRecords}
           loading={bulkDeleteLoading}
+        />
+
+        {/* Modal de importación de Excel */}
+        <ExcelImportModal
+          isOpen={isExcelImportModalOpen}
+          onClose={() => setIsExcelImportModalOpen(false)}
+          databaseName={selectedDb || ""}
+          tableName={selectedTable || ""}
+          token={token || ""}
+          onImportComplete={handleExcelImportComplete}
+        />
+
+        {/* Modal de exportación de Excel */}
+        <ExcelExportModal
+          isOpen={isExcelExportModalOpen}
+          onClose={() => setIsExcelExportModalOpen(false)}
+          databaseName={selectedDb || ""}
+          tableName={selectedTable || ""}
+          currentPage={currentPage}
+          recordsPerPage={recordsPerPage}
+          totalRecords={totalRecords}
+          token={token || ""}
         />
       </div>
     </div>
