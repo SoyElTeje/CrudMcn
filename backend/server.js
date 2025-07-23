@@ -127,7 +127,8 @@ app.get(
         DATA_TYPE,
         IS_NULLABLE,
         COLUMN_DEFAULT,
-        CHARACTER_MAXIMUM_LENGTH
+        CHARACTER_MAXIMUM_LENGTH,
+        COLUMNPROPERTY(object_id(@tableName), COLUMN_NAME, 'IsIdentity') as IS_IDENTITY
       FROM INFORMATION_SCHEMA.COLUMNS 
       WHERE TABLE_NAME = @tableName
       ORDER BY ORDINAL_POSITION
@@ -146,18 +147,42 @@ app.get(
       const request = pool.request();
       request.input("tableName", tableName);
 
-      const [columnsResult, primaryKeyResult] = await Promise.all([
-        request.query(columnsQuery),
-        request.query(primaryKeyQuery),
-      ]);
+      // Get CHECK constraints information
+      const checkConstraintsQuery = `
+      SELECT 
+        ccu.COLUMN_NAME,
+        ccu.CONSTRAINT_NAME,
+        cc.CHECK_CLAUSE
+      FROM INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE ccu
+      JOIN INFORMATION_SCHEMA.CHECK_CONSTRAINTS cc ON ccu.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
+      WHERE ccu.TABLE_NAME = @tableName
+      `;
+
+      const [columnsResult, primaryKeyResult, checkConstraintsResult] =
+        await Promise.all([
+          request.query(columnsQuery),
+          request.query(primaryKeyQuery),
+          request.query(checkConstraintsQuery),
+        ]);
 
       const primaryKeys = primaryKeyResult.recordset.map(
         (row) => row.COLUMN_NAME
       );
 
+      // Add check constraints info to columns
+      const columnsWithConstraints = columnsResult.recordset.map((column) => {
+        const constraints = checkConstraintsResult.recordset.filter(
+          (constraint) => constraint.COLUMN_NAME === column.COLUMN_NAME
+        );
+        return {
+          ...column,
+          checkConstraints: constraints,
+        };
+      });
+
       res.json({
         tableName,
-        columns: columnsResult.recordset,
+        columns: columnsWithConstraints,
         primaryKeys,
       });
     } catch (error) {
@@ -227,7 +252,11 @@ app.post(
       const structureResponse = await pool
         .request()
         .input("tableName", tableName).query(`
-          SELECT COLUMN_NAME, IS_NULLABLE, COLUMN_DEFAULT
+          SELECT 
+            COLUMN_NAME, 
+            IS_NULLABLE, 
+            COLUMN_DEFAULT,
+            COLUMNPROPERTY(object_id(@tableName), COLUMN_NAME, 'IsIdentity') as IS_IDENTITY
           FROM INFORMATION_SCHEMA.COLUMNS 
           WHERE TABLE_NAME = @tableName
           ORDER BY ORDINAL_POSITION
@@ -235,21 +264,39 @@ app.post(
 
       const columns = structureResponse.recordset;
 
-      // Filter out columns that have default values or are nullable
-      const insertColumns = columns.filter(
-        (col) => !col.COLUMN_DEFAULT && col.IS_NULLABLE === "NO"
+      // Filter out only identity columns (auto-increment)
+      // Allow nullable columns and columns with default values
+      const insertColumns = columns.filter((col) => !col.IS_IDENTITY);
+
+      // Filter columns that have values provided by the user
+      const columnsWithValues = insertColumns.filter(
+        (col) =>
+          record.hasOwnProperty(col.COLUMN_NAME) &&
+          record[col.COLUMN_NAME] !== "" &&
+          record[col.COLUMN_NAME] !== null &&
+          record[col.COLUMN_NAME] !== undefined
       );
 
-      // Build INSERT query
-      const columnNames = insertColumns.map((col) => `[${col.COLUMN_NAME}]`).join(", ");
-      const valuePlaceholders = insertColumns.map((col) => `@${col.COLUMN_NAME}`).join(", ");
+      if (columnsWithValues.length === 0) {
+        return res.status(400).json({
+          error: "At least one field must be provided",
+        });
+      }
+
+      // Build INSERT query with only columns that have values
+      const columnNames = columnsWithValues
+        .map((col) => `[${col.COLUMN_NAME}]`)
+        .join(", ");
+      const valuePlaceholders = columnsWithValues
+        .map((col) => `@${col.COLUMN_NAME}`)
+        .join(", ");
 
       const query = `INSERT INTO [${tableName}] (${columnNames}) VALUES (${valuePlaceholders})`;
 
       const request = pool.request();
 
       // Add parameters for INSERT
-      insertColumns.forEach((col) => {
+      columnsWithValues.forEach((col) => {
         request.input(col.COLUMN_NAME, record[col.COLUMN_NAME]);
       });
 

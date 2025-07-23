@@ -65,11 +65,11 @@ function App() {
   const [editingRecord, setEditingRecord] = useState<any | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
-  
+
   // Estados para agregar registros
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
-  
+
   const [tableStructure, setTableStructure] = useState<TableStructure | null>(
     null
   );

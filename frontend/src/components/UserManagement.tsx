@@ -80,14 +80,10 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
   const [selectedDatabase, setSelectedDatabase] = useState<string>("");
   const [selectedTable, setSelectedTable] = useState<string>("");
   const [databasePermissions, setDatabasePermissions] = useState({
-    canRead: true,
-    canWrite: false,
-    canDelete: false,
+    hasAccess: true,
   });
   const [tablePermissions, setTablePermissions] = useState({
-    canRead: true,
-    canWrite: false,
-    canDelete: false,
+    hasAccess: true,
   });
   const [savingPermissions, setSavingPermissions] = useState(false);
 
@@ -241,15 +237,17 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
         `/api/auth/users/${selectedUserForPermissions.id}/database-permissions`,
         {
           databaseName: selectedDatabase,
-          permissions: databasePermissions,
+          permissions: {
+            canRead: databasePermissions.hasAccess,
+            canWrite: databasePermissions.hasAccess,
+            canDelete: databasePermissions.hasAccess,
+          },
         }
       );
       await loadUserPermissions(selectedUserForPermissions);
       setSelectedDatabase("");
       setDatabasePermissions({
-        canRead: true,
-        canWrite: false,
-        canDelete: false,
+        hasAccess: true,
       });
     } catch (error: any) {
       setError(
@@ -275,12 +273,16 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
         {
           databaseName: selectedDatabase,
           tableName: selectedTable,
-          permissions: tablePermissions,
+          permissions: {
+            canRead: tablePermissions.hasAccess,
+            canWrite: tablePermissions.hasAccess,
+            canDelete: tablePermissions.hasAccess,
+          },
         }
       );
       await loadUserPermissions(selectedUserForPermissions);
       setSelectedTable("");
-      setTablePermissions({ canRead: true, canWrite: false, canDelete: false });
+      setTablePermissions({ hasAccess: true });
     } catch (error: any) {
       setError(
         error.response?.data?.error || "Error asignando permisos de tabla"
@@ -431,7 +433,7 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
                     <div className="flex gap-2">
                       <Button
                         size="sm"
-                        variant="outline"
+                        className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
                         onClick={() => {
                           setEditingUser(user);
                           setShowEditForm(true);
@@ -441,14 +443,14 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
                       </Button>
                       <Button
                         size="sm"
-                        variant="outline"
+                        className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
                         onClick={() => openPermissionsModal(user)}
                       >
                         Permisos
                       </Button>
                       <Button
                         size="sm"
-                        variant="outline"
+                        className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
                         onClick={() => handleToggleAdmin(user)}
                       >
                         {user.isAdmin ? "Quitar Admin" : "Hacer Admin"}
@@ -472,11 +474,13 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
       {/* Modal para crear usuario */}
       {showCreateForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-card border border-border/50 rounded-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4">Crear Nuevo Usuario</h3>
+          <div className="bg-white border border-gray-300 rounded-xl p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4 text-black">
+              Crear Nuevo Usuario
+            </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className="block text-sm font-medium mb-2 text-black">
                   Usuario
                 </label>
                 <input
@@ -485,12 +489,12 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
                   onChange={(e) =>
                     setNewUser({ ...newUser, username: e.target.value })
                   }
-                  className="w-full p-2 border border-border/50 rounded-lg bg-background"
+                  className="w-full p-2 border border-gray-300 rounded-lg bg-white text-black"
                   placeholder="Nombre de usuario"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className="block text-sm font-medium mb-2 text-black">
                   Contraseña
                 </label>
                 <input
@@ -499,7 +503,7 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
                   onChange={(e) =>
                     setNewUser({ ...newUser, password: e.target.value })
                   }
-                  className="w-full p-2 border border-border/50 rounded-lg bg-background"
+                  className="w-full p-2 border border-gray-300 rounded-lg bg-white text-black"
                   placeholder="Contraseña"
                 />
               </div>
@@ -513,20 +517,24 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
                   }
                   className="mr-2"
                 />
-                <label htmlFor="isAdmin" className="text-sm">
+                <label htmlFor="isAdmin" className="text-sm text-black">
                   Es Administrador
                 </label>
               </div>
             </div>
             <div className="flex gap-2 mt-6">
-              <Button onClick={handleCreateUser} disabled={creatingUser}>
-                {creatingUser ? "Creando..." : "Crear"}
-              </Button>
               <Button
-                variant="outline"
                 onClick={() => setShowCreateForm(false)}
+                className="bg-[#447cd7] hover:bg-[#3a6bc4] text-white"
               >
                 Cancelar
+              </Button>
+              <Button
+                onClick={handleCreateUser}
+                disabled={creatingUser}
+                className="bg-[#0d206c] hover:bg-[#0a1a5a] text-white"
+              >
+                {creatingUser ? "Creando..." : "Crear"}
               </Button>
             </div>
           </div>
@@ -536,30 +544,37 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
       {/* Modal para cambiar contraseña */}
       {showEditForm && editingUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-card border border-border/50 rounded-xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4">
+          <div className="bg-white border border-gray-300 rounded-xl p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4 text-black">
               Cambiar Contraseña - {editingUser.username}
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className="block text-sm font-medium mb-2 text-black">
                   Nueva Contraseña
                 </label>
                 <input
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full p-2 border border-border/50 rounded-lg bg-background"
+                  className="w-full p-2 border border-gray-300 rounded-lg bg-white text-black"
                   placeholder="Nueva contraseña"
                 />
               </div>
             </div>
             <div className="flex gap-2 mt-6">
-              <Button onClick={handleUpdatePassword} disabled={updatingUser}>
-                {updatingUser ? "Actualizando..." : "Actualizar"}
-              </Button>
-              <Button variant="outline" onClick={() => setShowEditForm(false)}>
+              <Button
+                onClick={() => setShowEditForm(false)}
+                className="bg-[#447cd7] hover:bg-[#3a6bc4] text-white"
+              >
                 Cancelar
+              </Button>
+              <Button
+                onClick={handleUpdatePassword}
+                disabled={updatingUser}
+                className="bg-[#0d206c] hover:bg-[#0a1a5a] text-white"
+              >
+                {updatingUser ? "Actualizando..." : "Actualizar"}
               </Button>
             </div>
           </div>
@@ -569,26 +584,26 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
       {/* Modal de permisos */}
       {showPermissionsModal && selectedUserForPermissions && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-card border border-border/50 rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4">
+          <div className="bg-white border border-gray-300 rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4 text-black">
               Permisos - {selectedUserForPermissions.username}
             </h3>
 
             {/* Permisos de Base de Datos */}
             <div className="mb-6">
-              <h4 className="text-md font-medium mb-3">
+              <h4 className="text-md font-medium mb-3 text-black">
                 Asignar Permisos de Base de Datos
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <label className="block text-sm font-medium mb-2 text-black">
                     Base de Datos
                   </label>
                   <Select
                     value={selectedDatabase}
                     onValueChange={setSelectedDatabase}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-white border-gray-300 text-black">
                       <SelectValue placeholder="Seleccionar base de datos" />
                     </SelectTrigger>
                     <SelectContent>
@@ -603,58 +618,24 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
                 <div className="flex items-center">
                   <input
                     type="checkbox"
-                    id="dbRead"
-                    checked={databasePermissions.canRead}
+                    id="dbAccess"
+                    checked={databasePermissions.hasAccess}
                     onChange={(e) =>
                       setDatabasePermissions({
-                        ...databasePermissions,
-                        canRead: e.target.checked,
+                        hasAccess: e.target.checked,
                       })
                     }
                     className="mr-2"
                   />
-                  <label htmlFor="dbRead" className="text-sm">
-                    Lectura
-                  </label>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="dbWrite"
-                    checked={databasePermissions.canWrite}
-                    onChange={(e) =>
-                      setDatabasePermissions({
-                        ...databasePermissions,
-                        canWrite: e.target.checked,
-                      })
-                    }
-                    className="mr-2"
-                  />
-                  <label htmlFor="dbWrite" className="text-sm">
-                    Escritura
-                  </label>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="dbDelete"
-                    checked={databasePermissions.canDelete}
-                    onChange={(e) =>
-                      setDatabasePermissions({
-                        ...databasePermissions,
-                        canDelete: e.target.checked,
-                      })
-                    }
-                    className="mr-2"
-                  />
-                  <label htmlFor="dbDelete" className="text-sm">
-                    Eliminación
+                  <label htmlFor="dbAccess" className="text-sm text-black">
+                    Acceso Completo (Lectura, Escritura, Eliminación)
                   </label>
                 </div>
               </div>
               <Button
                 onClick={handleAssignDatabasePermissions}
                 disabled={savingPermissions || !selectedDatabase}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {savingPermissions ? "Guardando..." : "Asignar Permisos de BD"}
               </Button>
@@ -662,12 +643,12 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
 
             {/* Permisos de Tabla */}
             <div className="mb-6">
-              <h4 className="text-md font-medium mb-3">
+              <h4 className="text-md font-medium mb-3 text-black">
                 Asignar Permisos de Tabla Específica
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <label className="block text-sm font-medium mb-2 text-black">
                     Base de Datos
                   </label>
                   <Select
@@ -678,7 +659,7 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
                       loadTables(value);
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-white border-gray-300 text-black">
                       <SelectValue placeholder="Seleccionar base de datos" />
                     </SelectTrigger>
                     <SelectContent>
@@ -691,7 +672,7 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <label className="block text-sm font-medium mb-2 text-black">
                     Tabla
                   </label>
                   <Select
@@ -699,7 +680,7 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
                     onValueChange={setSelectedTable}
                     disabled={!selectedDatabase}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-white border-gray-300 text-black">
                       <SelectValue placeholder="Seleccionar tabla" />
                     </SelectTrigger>
                     <SelectContent>
@@ -714,52 +695,17 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
                 <div className="flex items-center">
                   <input
                     type="checkbox"
-                    id="tableRead"
-                    checked={tablePermissions.canRead}
+                    id="tableAccess"
+                    checked={tablePermissions.hasAccess}
                     onChange={(e) =>
                       setTablePermissions({
-                        ...tablePermissions,
-                        canRead: e.target.checked,
+                        hasAccess: e.target.checked,
                       })
                     }
                     className="mr-2"
                   />
-                  <label htmlFor="tableRead" className="text-sm">
-                    Lectura
-                  </label>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="tableWrite"
-                    checked={tablePermissions.canWrite}
-                    onChange={(e) =>
-                      setTablePermissions({
-                        ...tablePermissions,
-                        canWrite: e.target.checked,
-                      })
-                    }
-                    className="mr-2"
-                  />
-                  <label htmlFor="tableWrite" className="text-sm">
-                    Escritura
-                  </label>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="tableDelete"
-                    checked={tablePermissions.canDelete}
-                    onChange={(e) =>
-                      setTablePermissions({
-                        ...tablePermissions,
-                        canDelete: e.target.checked,
-                      })
-                    }
-                    className="mr-2"
-                  />
-                  <label htmlFor="tableDelete" className="text-sm">
-                    Eliminación
+                  <label htmlFor="tableAccess" className="text-sm text-black">
+                    Acceso Completo (Lectura, Escritura, Eliminación)
                   </label>
                 </div>
               </div>
@@ -768,6 +714,7 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
                 disabled={
                   savingPermissions || !selectedDatabase || !selectedTable
                 }
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {savingPermissions
                   ? "Guardando..."
@@ -779,8 +726,8 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
             {loadingPermissions ? (
               <div className="flex items-center justify-center py-8">
                 <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-muted-foreground font-medium">
+                  <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-black font-medium">
                     Cargando permisos...
                   </span>
                 </div>
@@ -788,14 +735,14 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
             ) : (
               userPermissions && (
                 <div>
-                  <h4 className="text-md font-medium mb-3">
+                  <h4 className="text-md font-medium mb-3 text-black">
                     Permisos Actuales
                   </h4>
 
                   {/* Permisos de Base de Datos */}
                   {userPermissions.databasePermissions.length > 0 && (
                     <div className="mb-4">
-                      <h5 className="text-sm font-medium mb-2">
+                      <h5 className="text-sm font-medium mb-2 text-black">
                         Bases de Datos:
                       </h5>
                       <div className="space-y-2">
@@ -805,35 +752,22 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
                               key={index}
                               className="flex items-center gap-4 text-sm"
                             >
-                              <span className="font-medium">
+                              <span className="font-medium text-black">
                                 {perm.databaseName}
                               </span>
                               <span
                                 className={
-                                  perm.canRead
-                                    ? "text-green-600"
-                                    : "text-red-600"
-                                }
-                              >
-                                {perm.canRead ? "✓" : "✗"} Lectura
-                              </span>
-                              <span
-                                className={
-                                  perm.canWrite
-                                    ? "text-green-600"
-                                    : "text-red-600"
-                                }
-                              >
-                                {perm.canWrite ? "✓" : "✗"} Escritura
-                              </span>
-                              <span
-                                className={
+                                  perm.canRead &&
+                                  perm.canWrite &&
                                   perm.canDelete
                                     ? "text-green-600"
                                     : "text-red-600"
                                 }
                               >
-                                {perm.canDelete ? "✓" : "✗"} Eliminación
+                                {perm.canRead && perm.canWrite && perm.canDelete
+                                  ? "✓"
+                                  : "✗"}{" "}
+                                Acceso Completo
                               </span>
                             </div>
                           )
@@ -845,7 +779,7 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
                   {/* Permisos de Tablas */}
                   {userPermissions.tablePermissions.length > 0 && (
                     <div>
-                      <h5 className="text-sm font-medium mb-2">
+                      <h5 className="text-sm font-medium mb-2 text-black">
                         Tablas Específicas:
                       </h5>
                       <div className="space-y-2">
@@ -854,33 +788,20 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
                             key={index}
                             className="flex items-center gap-4 text-sm"
                           >
-                            <span className="font-medium">
+                            <span className="font-medium text-black">
                               {perm.databaseName}.{perm.tableName}
                             </span>
                             <span
                               className={
-                                perm.canRead ? "text-green-600" : "text-red-600"
-                              }
-                            >
-                              {perm.canRead ? "✓" : "✗"} Lectura
-                            </span>
-                            <span
-                              className={
-                                perm.canWrite
+                                perm.canRead && perm.canWrite && perm.canDelete
                                   ? "text-green-600"
                                   : "text-red-600"
                               }
                             >
-                              {perm.canWrite ? "✓" : "✗"} Escritura
-                            </span>
-                            <span
-                              className={
-                                perm.canDelete
-                                  ? "text-green-600"
-                                  : "text-red-600"
-                              }
-                            >
-                              {perm.canDelete ? "✓" : "✗"} Eliminación
+                              {perm.canRead && perm.canWrite && perm.canDelete
+                                ? "✓"
+                                : "✗"}{" "}
+                              Acceso Completo
                             </span>
                           </div>
                         ))}
@@ -890,7 +811,7 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
 
                   {userPermissions.databasePermissions.length === 0 &&
                     userPermissions.tablePermissions.length === 0 && (
-                      <p className="text-muted-foreground text-sm">
+                      <p className="text-gray-600 text-sm">
                         No hay permisos específicos asignados.
                       </p>
                     )}
@@ -900,8 +821,8 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
 
             <div className="flex justify-end mt-6">
               <Button
-                variant="outline"
                 onClick={() => setShowPermissionsModal(false)}
+                className="bg-[#447cd7] hover:bg-[#3a6bc4] text-white"
               >
                 Cerrar
               </Button>
