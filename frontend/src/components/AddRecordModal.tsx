@@ -152,6 +152,11 @@ export function AddRecordModal({
 
   // Función para validar campos requeridos
   const validateRequired = (column: any, value: string): string | null => {
+    // No validar campos que son identity (auto-increment)
+    if (column.IS_IDENTITY) {
+      return null;
+    }
+
     const isRequired = column.IS_NULLABLE === "NO" && !column.COLUMN_DEFAULT;
     if (isRequired && (!value || value.trim() === "")) {
       return "Este campo es requerido";
@@ -177,9 +182,85 @@ export function AddRecordModal({
     }
 
     if (dataType.includes("date") || dataType.includes("datetime")) {
-      const dateValue = new Date(value);
-      if (isNaN(dateValue.getTime())) {
-        return `El valor debe ser una fecha válida`;
+      // Para datetime, validar formato DD/MM/AAAA HH:MM
+      if (dataType.includes("datetime")) {
+        const datetimeRegex =
+          /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{1,2})$/;
+        const match = value.match(datetimeRegex);
+
+        if (!match) {
+          return `El valor debe ser una fecha y hora válida en formato DD/MM/AAAA HH:MM`;
+        }
+
+        const day = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10) - 1; // Los meses en JavaScript van de 0 a 11
+        const year = parseInt(match[3], 10);
+        const hour = parseInt(match[4], 10);
+        const minute = parseInt(match[5], 10);
+
+        // Validar rangos
+        if (
+          day < 1 ||
+          day > 31 ||
+          month < 0 ||
+          month > 11 ||
+          year < 1900 ||
+          year > 2100 ||
+          hour < 0 ||
+          hour > 23 ||
+          minute < 0 ||
+          minute > 59
+        ) {
+          return `El valor debe ser una fecha y hora válida en formato DD/MM/AAAA HH:MM`;
+        }
+
+        // Crear la fecha y verificar que sea válida
+        const dateValue = new Date(year, month, day, hour, minute);
+        if (
+          dateValue.getDate() !== day ||
+          dateValue.getMonth() !== month ||
+          dateValue.getFullYear() !== year ||
+          dateValue.getHours() !== hour ||
+          dateValue.getMinutes() !== minute ||
+          isNaN(dateValue.getTime())
+        ) {
+          return `El valor debe ser una fecha y hora válida en formato DD/MM/AAAA HH:MM`;
+        }
+      } else {
+        // Para date, validar formato DD/MM/AAAA
+        const dateRegex = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+        const match = value.match(dateRegex);
+
+        if (!match) {
+          return `El valor debe ser una fecha válida en formato DD/MM/AAAA`;
+        }
+
+        const day = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10) - 1; // Los meses en JavaScript van de 0 a 11
+        const year = parseInt(match[3], 10);
+
+        // Validar rangos
+        if (
+          day < 1 ||
+          day > 31 ||
+          month < 0 ||
+          month > 11 ||
+          year < 1900 ||
+          year > 2100
+        ) {
+          return `El valor debe ser una fecha válida en formato DD/MM/AAAA`;
+        }
+
+        // Crear la fecha y verificar que sea válida
+        const dateValue = new Date(year, month, day);
+        if (
+          dateValue.getDate() !== day ||
+          dateValue.getMonth() !== month ||
+          dateValue.getFullYear() !== year ||
+          isNaN(dateValue.getTime())
+        ) {
+          return `El valor debe ser una fecha válida en formato DD/MM/AAAA`;
+        }
       }
     }
 
@@ -243,15 +324,33 @@ export function AddRecordModal({
       return;
     }
 
-    // Filtrar solo los campos que tienen valores (no vacíos)
+    // Filtrar solo los campos que tienen valores (no vacíos) y combinar datetime
     const filteredData: any = {};
     Object.keys(formData).forEach((key) => {
+      // Ignorar campos auxiliares de hora y minutos
+      if (key.includes("_hour") || key.includes("_minute")) {
+        return;
+      }
+
       if (
         formData[key] !== "" &&
         formData[key] !== null &&
         formData[key] !== undefined
       ) {
-        filteredData[key] = formData[key];
+        // Si es un campo datetime, combinar fecha con hora y minutos
+        const column = editableColumns.find(
+          (col: any) => col.COLUMN_NAME === key
+        );
+        if (column && column.DATA_TYPE.toLowerCase().includes("datetime")) {
+          const dateValue = formData[key];
+          const hourValue = formData[`${key}_hour`] || "00";
+          const minuteValue = formData[`${key}_minute`] || "00";
+
+          // Combinar fecha con hora y minutos: DD/MM/AAAA HH:MM
+          filteredData[key] = `${dateValue} ${hourValue}:${minuteValue}`;
+        } else {
+          filteredData[key] = formData[key];
+        }
       }
     });
 
@@ -362,6 +461,61 @@ export function AddRecordModal({
                       </option>
                     ))}
                   </select>
+                ) : column.DATA_TYPE.toLowerCase().includes("datetime") ? (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={formData[column.COLUMN_NAME] || ""}
+                      onChange={(e) =>
+                        handleInputChange(column.COLUMN_NAME, e.target.value)
+                      }
+                      className={`w-full px-3 py-2 border rounded-lg bg-background text-white focus:outline-none focus:ring-2 focus:border-primary ${
+                        errors[column.COLUMN_NAME]
+                          ? "border-red-500 focus:ring-red-500/50"
+                          : "border-border/50 focus:ring-primary/50"
+                      }`}
+                      disabled={loading}
+                      required={isRequired}
+                      placeholder="DD/MM/AAAA"
+                    />
+                    <div className="flex gap-2">
+                      <select
+                        value={formData[`${column.COLUMN_NAME}_hour`] || "00"}
+                        onChange={(e) => {
+                          const newFormData = { ...formData };
+                          newFormData[`${column.COLUMN_NAME}_hour`] =
+                            e.target.value;
+                          setFormData(newFormData);
+                        }}
+                        className="px-3 py-2 border rounded-lg bg-background text-white focus:outline-none focus:ring-2 focus:border-primary border-border/50 focus:ring-primary/50"
+                        disabled={loading}
+                      >
+                        {Array.from({ length: 24 }, (_, i) => (
+                          <option key={i} value={i.toString().padStart(2, "0")}>
+                            {i.toString().padStart(2, "0")}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-white self-center">:</span>
+                      <select
+                        value={formData[`${column.COLUMN_NAME}_minute`] || "00"}
+                        onChange={(e) => {
+                          const newFormData = { ...formData };
+                          newFormData[`${column.COLUMN_NAME}_minute`] =
+                            e.target.value;
+                          setFormData(newFormData);
+                        }}
+                        className="px-3 py-2 border rounded-lg bg-background text-white focus:outline-none focus:ring-2 focus:border-primary border-border/50 focus:ring-primary/50"
+                        disabled={loading}
+                      >
+                        {Array.from({ length: 60 }, (_, i) => (
+                          <option key={i} value={i.toString().padStart(2, "0")}>
+                            {i.toString().padStart(2, "0")}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 ) : (
                   <input
                     type="text"

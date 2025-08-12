@@ -135,6 +135,25 @@ const requireCreatePermission = async (req, res, next) => {
   }
 };
 
+// Middleware para verificar permisos para listar tablas
+const requireTableListingPermission = async (req, res, next) => {
+  try {
+    const { dbName } = req.params;
+    const canList = await authService.canListTables(req.user.id, dbName);
+
+    if (!canList) {
+      return res.status(403).json({
+        error: "Sin permisos para listar tablas en esta base de datos",
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error("Error verificando permisos para listar tablas:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
 module.exports = {
   authenticateToken,
   requireAdmin,
@@ -142,4 +161,5 @@ module.exports = {
   requireWritePermission,
   requireDeletePermission,
   requireCreatePermission,
+  requireTableListingPermission,
 };

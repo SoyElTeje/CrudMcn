@@ -9,14 +9,21 @@ const {
 } = require("./routes/auth");
 
 const logsRoutes = require("./routes/logs");
+const activatedTablesRoutes = require("./routes/activatedTables");
 
 const logService = require("./services/logService");
+const {
+  parseDateDDMMYYYY,
+  convertToISODate,
+  isMMDDYYYYFormat,
+} = require("./utils/dateUtils");
 
 const {
   requireReadPermission,
   requireWritePermission,
   requireDeletePermission,
   requireCreatePermission,
+  requireTableListingPermission,
 } = require("./middleware/auth");
 
 // Importar middleware de upload y servicio de Excel
@@ -44,6 +51,9 @@ app.use("/api/auth", authRoutes);
 
 // Rutas de logs
 app.use("/api/logs", logsRoutes);
+
+// Rutas de tablas activadas
+app.use("/api/activated-tables", activatedTablesRoutes);
 
 // Trial endpoint
 app.get("/api/trial/table", async (req, res) => {
@@ -139,26 +149,72 @@ app.get("/api/databases", authenticateToken, async (req, res) => {
   }
 });
 
-// List all tables in a database
+// List tables in a database (solo tablas activadas)
 app.get(
   "/api/databases/:dbName/tables",
   authenticateToken,
-  requireReadPermission,
+  requireTableListingPermission,
   async (req, res) => {
     try {
       const dbName = req.params.dbName;
-      const pool = await getPool(dbName);
-      const tablesResult = await pool
+      const userId = req.user.id;
+
+      // Importar el servicio de tablas activadas
+      const activatedTablesService = require("./services/activatedTablesService");
+
+      // Obtener solo las tablas activadas para esta base de datos
+      const activatedTables = await activatedTablesService.getActivatedTables();
+      const tablesForDb = activatedTables.filter(
+        (table) => table.DatabaseName === dbName
+      );
+
+      // Si el usuario es admin, mostrar todas las tablas activadas
+      if (req.user.isAdmin) {
+        const tables = tablesForDb.map((table) => ({
+          schema: table.DatabaseName,
+          name: table.TableName,
+          database: table.DatabaseName,
+          description: table.Description,
+          activatedTableId: table.Id,
+        }));
+        res.json(tables);
+        return;
+      }
+
+      // Para usuarios no admin, verificar permisos específicos de tabla
+      const pool = await getPool();
+      const userTablePermissionsQuery = `
+        SELECT TableName 
+        FROM USER_TABLE_PERMISSIONS 
+        WHERE UserId = @userId AND DatabaseName = @dbName
+      `;
+
+      const userTablePermissionsResult = await pool
         .request()
-        .query(
-          `SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'`
-        );
-      const tables = tablesResult.recordset.map((row) => ({
-        schema: row.TABLE_SCHEMA,
-        name: row.TABLE_NAME,
+        .input("userId", userId)
+        .input("dbName", dbName)
+        .query(userTablePermissionsQuery);
+
+      const permittedTables = userTablePermissionsResult.recordset.map(
+        (row) => row.TableName
+      );
+
+      // Filtrar solo las tablas activadas que el usuario tiene permisos para ver
+      const accessibleTables = tablesForDb.filter((table) =>
+        permittedTables.includes(table.TableName)
+      );
+
+      const tables = accessibleTables.map((table) => ({
+        schema: table.DatabaseName,
+        name: table.TableName,
+        database: table.DatabaseName,
+        description: table.Description,
+        activatedTableId: table.Id,
       }));
+
       res.json(tables);
     } catch (error) {
+      console.error("Error fetching tables:", error);
       res
         .status(500)
         .json({ error: "Failed to fetch tables", details: error.message });
@@ -259,16 +315,45 @@ app.get(
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
-      const { limit = 100, offset = 0 } = req.query;
+      const { limit = 100, offset = 0, filters, sort } = req.query;
 
       const pool = await getPool(dbName);
-      const result = await pool
-        .request()
-        .input("limit", parseInt(limit))
-        .input("offset", parseInt(offset))
-        .query(
-          `SELECT * FROM [${tableName}] ORDER BY (SELECT NULL) OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
-        );
+      const request = pool.request();
+
+      // Parse filters and sort from query parameters
+      let parsedFilters = [];
+      let parsedSort = null;
+
+      if (filters) {
+        try {
+          parsedFilters = JSON.parse(filters);
+        } catch (e) {
+          console.warn("Invalid filters format:", e);
+        }
+      }
+
+      if (sort) {
+        try {
+          parsedSort = JSON.parse(sort);
+        } catch (e) {
+          console.warn("Invalid sort format:", e);
+        }
+      }
+
+      // Import query builder
+      const { buildSelectQuery } = require("./utils/queryBuilder");
+
+      // Build the query with filters and sorting
+      const query = buildSelectQuery(
+        tableName,
+        parsedFilters,
+        parsedSort,
+        limit,
+        offset,
+        request
+      );
+
+      const result = await request.query(query);
 
       res.json({
         database: dbName,
@@ -294,11 +379,29 @@ app.get(
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
+      const { filters } = req.query;
 
       const pool = await getPool(dbName);
-      const result = await pool
-        .request()
-        .query(`SELECT COUNT(*) as count FROM [${tableName}]`);
+      const request = pool.request();
+
+      // Parse filters from query parameters
+      let parsedFilters = [];
+
+      if (filters) {
+        try {
+          parsedFilters = JSON.parse(filters);
+        } catch (e) {
+          console.warn("Invalid filters format:", e);
+        }
+      }
+
+      // Import query builder
+      const { buildCountQuery } = require("./utils/queryBuilder");
+
+      // Build the count query with filters
+      const query = buildCountQuery(tableName, parsedFilters, request);
+
+      const result = await request.query(query);
 
       res.json({
         count: result.recordset[0].count,
@@ -326,6 +429,33 @@ app.post(
       if (!record) {
         return res.status(400).json({
           error: "Record data is required",
+        });
+      }
+
+      // Importar el servicio de tablas activadas para validación
+      const activatedTablesService = require("./services/activatedTablesService");
+
+      // Verificar si la tabla está activada
+      const isActivated = await activatedTablesService.isTableActivated(
+        dbName,
+        tableName
+      );
+      if (!isActivated) {
+        return res.status(403).json({
+          error: "Esta tabla no está disponible para operaciones de escritura",
+        });
+      }
+
+      // Validar los datos según las condiciones configuradas
+      const validation = await activatedTablesService.validateTableData(
+        dbName,
+        tableName,
+        record
+      );
+      if (!validation.isValid) {
+        return res.status(400).json({
+          error: "Los datos no cumplen con las condiciones configuradas",
+          details: validation.errors,
         });
       }
 
@@ -380,7 +510,49 @@ app.post(
 
       // Add parameters for INSERT
       columnsWithValues.forEach((col) => {
-        request.input(col.COLUMN_NAME, record[col.COLUMN_NAME]);
+        let value = record[col.COLUMN_NAME];
+
+        // Convertir fechas de DD/MM/AAAA a YYYY-MM-DD para la base de datos
+        if (
+          col.DATA_TYPE &&
+          (col.DATA_TYPE.toLowerCase().includes("date") ||
+            col.DATA_TYPE.toLowerCase().includes("datetime"))
+        ) {
+          if (value && typeof value === "string") {
+            console.log(
+              `DEBUG: Procesando fecha para columna ${col.COLUMN_NAME}: "${value}"`
+            );
+
+            // Verificar si es formato MM/DD/AAAA y rechazarlo
+            if (isMMDDYYYYFormat(value)) {
+              console.log(
+                `DEBUG: Formato MM/DD/AAAA detectado y rechazado: "${value}"`
+              );
+              return res.status(400).json({
+                error: "Formato de fecha inválido",
+                details: `El campo '${col.COLUMN_NAME}' debe estar en formato DD/MM/AAAA, no MM/DD/AAAA`,
+                errorType: "date_format_violation",
+              });
+            }
+
+            const isoDate = convertToISODate(value);
+            console.log(`DEBUG: Resultado de convertToISODate: "${isoDate}"`);
+            if (isoDate) {
+              value = isoDate;
+              console.log(`DEBUG: Fecha convertida a: "${value}"`);
+            } else {
+              // Si la conversión falla, lanzar error
+              console.log(`DEBUG: Error de conversión para fecha: "${value}"`);
+              return res.status(400).json({
+                error: "Formato de fecha inválido",
+                details: `El campo '${col.COLUMN_NAME}' debe estar en formato DD/MM/AAAA`,
+                errorType: "date_format_violation",
+              });
+            }
+          }
+        }
+
+        request.input(col.COLUMN_NAME, value);
       });
 
       const result = await request.query(query);
@@ -491,6 +663,33 @@ app.put(
         });
       }
 
+      // Importar el servicio de tablas activadas para validación
+      const activatedTablesService = require("./services/activatedTablesService");
+
+      // Verificar si la tabla está activada
+      const isActivated = await activatedTablesService.isTableActivated(
+        dbName,
+        tableName
+      );
+      if (!isActivated) {
+        return res.status(403).json({
+          error: "Esta tabla no está disponible para operaciones de escritura",
+        });
+      }
+
+      // Validar los datos según las condiciones configuradas
+      const validation = await activatedTablesService.validateTableData(
+        dbName,
+        tableName,
+        record
+      );
+      if (!validation.isValid) {
+        return res.status(400).json({
+          error: "Los datos no cumplen con las condiciones configuradas",
+          details: validation.errors,
+        });
+      }
+
       const pool = await getPool(dbName);
 
       // Get table structure to identify primary keys
@@ -531,7 +730,43 @@ app.put(
 
       // Add parameters for SET clause
       setFields.forEach((key) => {
-        request.input(key, record[key]);
+        let value = record[key];
+
+        // Buscar el tipo de dato de la columna
+        const column = columns.find((col) => col.COLUMN_NAME === key);
+
+        // Convertir fechas de DD/MM/AAAA a YYYY-MM-DD para la base de datos
+        if (
+          column &&
+          column.DATA_TYPE &&
+          (column.DATA_TYPE.toLowerCase().includes("date") ||
+            column.DATA_TYPE.toLowerCase().includes("datetime"))
+        ) {
+          if (value && typeof value === "string") {
+            // Verificar si es formato MM/DD/AAAA y rechazarlo
+            if (isMMDDYYYYFormat(value)) {
+              return res.status(400).json({
+                error: "Formato de fecha inválido",
+                details: `El campo '${key}' debe estar en formato DD/MM/AAAA, no MM/DD/AAAA`,
+                errorType: "date_format_violation",
+              });
+            }
+
+            const isoDate = convertToISODate(value);
+            if (isoDate) {
+              value = isoDate;
+            } else {
+              // Si la conversión falla, lanzar error
+              return res.status(400).json({
+                error: "Formato de fecha inválido",
+                details: `El campo '${key}' debe estar en formato DD/MM/AAAA`,
+                errorType: "date_format_violation",
+              });
+            }
+          }
+        }
+
+        request.input(key, value);
       });
 
       // Add parameters for WHERE clause (primary keys)
@@ -968,7 +1203,7 @@ app.get(
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
-      const { exportType = "all", limit, offset } = req.query;
+      const { exportType = "all", limit, offset, filters, sort } = req.query;
 
       console.log(
         `📊 Exportando datos de ${dbName}.${tableName} - Tipo: ${exportType}`
@@ -982,13 +1217,35 @@ app.get(
         });
       }
 
+      // Parse filters and sort from query parameters
+      let parsedFilters = [];
+      let parsedSort = null;
+
+      if (filters) {
+        try {
+          parsedFilters = JSON.parse(filters);
+        } catch (e) {
+          console.warn("Invalid filters format:", e);
+        }
+      }
+
+      if (sort) {
+        try {
+          parsedSort = JSON.parse(sort);
+        } catch (e) {
+          console.warn("Invalid sort format:", e);
+        }
+      }
+
       // Procesar la exportación
       const result = await excelService.exportTableToExcel(
         dbName,
         tableName,
         exportType,
         limit,
-        offset
+        offset,
+        parsedFilters,
+        parsedSort
       );
 
       // Registrar log de exportación de Excel

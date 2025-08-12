@@ -301,4 +301,60 @@ router.post(
   }
 );
 
+// Ruta para eliminar permisos de base de datos (solo admin)
+router.delete(
+  "/users/:userId/database-permissions",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { databaseName } = req.body;
+
+      if (!databaseName) {
+        return res.status(400).json({ error: "databaseName es requerido" });
+      }
+
+      await authService.removeDatabasePermission(userId, databaseName);
+
+      res.json({
+        success: true,
+        message: "Permisos de base de datos eliminados correctamente",
+      });
+    } catch (error) {
+      console.error("Error eliminando permisos de base de datos:", error);
+      res.status(500).json({ error: "Error interno del servidor" });
+    }
+  }
+);
+
+// Ruta para eliminar permisos de tabla específica (solo admin)
+router.delete(
+  "/users/:userId/table-permissions",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { databaseName, tableName } = req.body;
+
+      if (!databaseName || !tableName) {
+        return res.status(400).json({
+          error: "databaseName y tableName son requeridos",
+        });
+      }
+
+      await authService.removeTablePermission(userId, databaseName, tableName);
+
+      res.json({
+        success: true,
+        message: "Permisos de tabla eliminados correctamente",
+      });
+    } catch (error) {
+      console.error("Error eliminando permisos de tabla:", error);
+      res.status(500).json({ error: "Error interno del servidor" });
+    }
+  }
+);
+
 module.exports = { router, authenticateToken, requireAdmin };

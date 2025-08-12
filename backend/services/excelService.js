@@ -307,33 +307,36 @@ class ExcelService {
     tableName,
     exportType = "all",
     limit = null,
-    offset = null
+    offset = null,
+    filters = [],
+    sort = null
   ) {
     try {
       const pool = await getPool(databaseName);
 
+      // Import query builder
+      const { buildSelectQuery } = require("../utils/queryBuilder");
+
       // Construir la consulta según el tipo de exportación
       let query;
-      let params = [];
+      const request = pool.request();
 
       if (exportType === "current_page" && limit !== null && offset !== null) {
-        // Exportar solo la página actual
-        query = `SELECT * FROM [${tableName}] ORDER BY (SELECT NULL) OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`;
-        params = [
-          { name: "offset", value: parseInt(offset) },
-          { name: "limit", value: parseInt(limit) },
-        ];
+        // Exportar solo la página actual con filtros y ordenamiento
+        query = buildSelectQuery(
+          tableName,
+          filters,
+          sort,
+          limit,
+          offset,
+          request
+        );
       } else {
-        // Exportar toda la tabla
-        query = `SELECT * FROM [${tableName}]`;
+        // Exportar toda la tabla con filtros y ordenamiento
+        query = buildSelectQuery(tableName, filters, sort, null, null, request);
       }
 
       // Ejecutar la consulta
-      const request = pool.request();
-      params.forEach((param) => {
-        request.input(param.name, param.value);
-      });
-
       const result = await request.query(query);
 
       if (result.recordset.length === 0) {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { Pagination } from "./Pagination";
 
 interface LogEntry {
   Id: number;
@@ -40,6 +41,11 @@ const LogsViewer: React.FC = () => {
   });
   const [currentView, setCurrentView] = useState<"logs" | "stats">("logs");
 
+  // Estados para paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [recordsPerPage, setRecordsPerPage] = useState(20);
+  const [totalRecords, setTotalRecords] = useState(0);
+
   const api = {
     get: async (url: string) => {
       const token = localStorage.getItem("token");
@@ -67,9 +73,25 @@ const LogsViewer: React.FC = () => {
         if (value) queryParams.append(key, value);
       });
 
+      // Agregar parámetros de paginación
+      queryParams.append("limit", recordsPerPage.toString());
+      queryParams.append(
+        "offset",
+        ((currentPage - 1) * recordsPerPage).toString()
+      );
+
       const url = `/api/logs/all?${queryParams.toString()}`;
       const data = await api.get(url);
-      setLogs(data);
+
+      // El backend ahora devuelve un objeto con data y metadatos de paginación
+      if (data.data) {
+        setLogs(data.data);
+        setTotalRecords(data.totalRecords);
+      } else {
+        // Fallback para compatibilidad con respuesta anterior
+        setLogs(data);
+        setTotalRecords(data.length);
+      }
       setError(null);
     } catch (err) {
       setError("Error al cargar los logs");
@@ -99,7 +121,7 @@ const LogsViewer: React.FC = () => {
     } else {
       fetchStats();
     }
-  }, [currentView, filters]);
+  }, [currentView, filters, currentPage, recordsPerPage]);
 
   const getActionColor = (action: string) => {
     switch (action) {
@@ -130,6 +152,21 @@ const LogsViewer: React.FC = () => {
     return str.length > 100 ? str.substring(0, 100) + "..." : str;
   };
 
+  const getActionIcon = (action: string) => {
+    switch (action) {
+      case "INSERT":
+        return "➕";
+      case "UPDATE":
+        return "✏️";
+      case "DELETE":
+        return "🗑️";
+      case "EXPORT":
+        return "📊";
+      default:
+        return "📝";
+    }
+  };
+
   const handleFilterChange = (key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
@@ -143,6 +180,18 @@ const LogsViewer: React.FC = () => {
       startDate: "",
       endDate: "",
     });
+    setCurrentPage(1); // Reset a la primera página al limpiar filtros
+  };
+
+  // Función para cambiar de página
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+  };
+
+  // Función para cambiar registros por página
+  const handleRecordsPerPageChange = (newRecordsPerPage: number) => {
+    setRecordsPerPage(newRecordsPerPage);
+    setCurrentPage(1); // Volver a la primera página
   };
 
   if (loading) {
@@ -319,7 +368,7 @@ const LogsViewer: React.FC = () => {
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200">
               <h3 className="text-lg font-medium text-gray-900">
-                Logs del Sistema ({logs.length} registros)
+                Logs del Sistema ({totalRecords} registros totales)
               </h3>
             </div>
 
@@ -419,6 +468,18 @@ const LogsViewer: React.FC = () => {
                   No se encontraron logs con los filtros aplicados
                 </p>
               </div>
+            )}
+
+            {/* Componente de paginación */}
+            {totalRecords > 0 && (
+              <Pagination
+                currentPage={currentPage}
+                totalPages={Math.ceil(totalRecords / recordsPerPage)}
+                totalRecords={totalRecords}
+                recordsPerPage={recordsPerPage}
+                onPageChange={handlePageChange}
+                onRecordsPerPageChange={handleRecordsPerPageChange}
+              />
             )}
           </div>
         </>

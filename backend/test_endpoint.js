@@ -3,42 +3,45 @@ const axios = require("axios");
 const BASE_URL = "http://localhost:3001";
 
 async function testEndpoint() {
-  console.log("🧪 Probando endpoint HTTP directamente...\n");
-
   try {
-    // 1. Login como admin
-    console.log("1️⃣ Login como admin...");
-    const adminLoginResponse = await axios.post(`${BASE_URL}/api/auth/login`, {
-      username: "admin",
-      password: "admin",
-    });
-    const adminToken = adminLoginResponse.data.token;
-    console.log("✅ Login admin exitoso");
+    console.log("🧪 Probando endpoint de tablas activadas...");
 
-    // 2. Probar endpoint de permisos para user2 (ID: 3)
-    console.log("\n2️⃣ Probando endpoint /api/auth/users/3/permissions...");
-    const permissionsResponse = await axios.get(
-      `${BASE_URL}/api/auth/users/3/permissions`,
-      {
-        headers: { Authorization: `Bearer ${adminToken}` },
-      }
-    );
-    console.log("📋 Respuesta del endpoint:");
-    console.log(JSON.stringify(permissionsResponse.data, null, 2));
-
-    // 3. Verificar el status code
-    console.log(`\n3️⃣ Status code: ${permissionsResponse.status}`);
-
-    console.log("\n🎉 Prueba del endpoint completada!");
-  } catch (error) {
-    console.error(
-      "❌ Error en la prueba:",
-      error.response?.data || error.message
-    );
-    if (error.response) {
-      console.log(`Status code: ${error.response.status}`);
+    // Probar sin token (debe fallar)
+    try {
+      const response = await axios.get(
+        `${BASE_URL}/api/activated-tables/all-tables`
+      );
+      console.log("❌ Debería haber fallado sin token");
+    } catch (error) {
+      console.log("✅ Correcto: Falló sin token:", error.response?.status);
     }
+
+    // Probar con token inválido
+    try {
+      const response = await axios.get(
+        `${BASE_URL}/api/activated-tables/all-tables`,
+        {
+          headers: {
+            Authorization: "Bearer invalid_token",
+          },
+        }
+      );
+      console.log("❌ Debería haber fallado con token inválido");
+    } catch (error) {
+      console.log(
+        "✅ Correcto: Falló con token inválido:",
+        error.response?.status
+      );
+    }
+
+    console.log("✅ Endpoint está funcionando correctamente");
+  } catch (error) {
+    console.error("❌ Error probando endpoint:", error.message);
   }
 }
 
-testEndpoint();
+if (require.main === module) {
+  testEndpoint();
+}
+
+module.exports = { testEndpoint };

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { formatDate } from "../lib/dateUtils";
 import {
   Table,
   TableHeader,
@@ -16,6 +17,7 @@ import {
   SelectContent,
   SelectItem,
 } from "./ui/select";
+import { ConfirmationModal } from "./ui/confirmation-modal";
 
 interface User {
   id: number;
@@ -86,6 +88,22 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
     hasAccess: true,
   });
   const [savingPermissions, setSavingPermissions] = useState(false);
+
+  // Estados para modales de confirmación
+  const [showDeleteUserModal, setShowDeleteUserModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [
+    showRemoveDatabasePermissionModal,
+    setShowRemoveDatabasePermissionModal,
+  ] = useState(false);
+  const [databasePermissionToRemove, setDatabasePermissionToRemove] =
+    useState<string>("");
+  const [showRemoveTablePermissionModal, setShowRemoveTablePermissionModal] =
+    useState(false);
+  const [tablePermissionToRemove, setTablePermissionToRemove] = useState<{
+    databaseName: string;
+    tableName: string;
+  } | null>(null);
 
   const api = axios.create({
     baseURL: "http://localhost:3001",
@@ -187,16 +205,15 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
 
   // Eliminar usuario
   const handleDeleteUser = async (user: User) => {
-    if (
-      !confirm(
-        `¿Estás seguro de que quieres eliminar al usuario "${user.username}"?`
-      )
-    ) {
-      return;
-    }
+    setUserToDelete(user);
+    setShowDeleteUserModal(true);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
 
     try {
-      await api.delete(`/api/auth/users/${user.id}`);
+      await api.delete(`/api/auth/users/${userToDelete.id}`);
       loadUsers();
     } catch (error: any) {
       setError(error.response?.data?.error || "Error eliminando usuario");
@@ -286,6 +303,77 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
     } catch (error: any) {
       setError(
         error.response?.data?.error || "Error asignando permisos de tabla"
+      );
+    } finally {
+      setSavingPermissions(false);
+    }
+  };
+
+  // Eliminar permisos de base de datos
+  const handleRemoveDatabasePermissions = async (databaseName: string) => {
+    if (!selectedUserForPermissions) {
+      setError("Usuario no seleccionado");
+      return;
+    }
+
+    setDatabasePermissionToRemove(databaseName);
+    setShowRemoveDatabasePermissionModal(true);
+  };
+
+  const confirmRemoveDatabasePermissions = async () => {
+    if (!selectedUserForPermissions || !databasePermissionToRemove) return;
+
+    try {
+      setSavingPermissions(true);
+      await api.delete(
+        `/api/auth/users/${selectedUserForPermissions.id}/database-permissions`,
+        {
+          data: { databaseName: databasePermissionToRemove },
+        }
+      );
+      await loadUserPermissions(selectedUserForPermissions);
+    } catch (error: any) {
+      setError(
+        error.response?.data?.error ||
+          "Error eliminando permisos de base de datos"
+      );
+    } finally {
+      setSavingPermissions(false);
+    }
+  };
+
+  // Eliminar permisos de tabla
+  const handleRemoveTablePermissions = async (
+    databaseName: string,
+    tableName: string
+  ) => {
+    if (!selectedUserForPermissions) {
+      setError("Usuario no seleccionado");
+      return;
+    }
+
+    setTablePermissionToRemove({ databaseName, tableName });
+    setShowRemoveTablePermissionModal(true);
+  };
+
+  const confirmRemoveTablePermissions = async () => {
+    if (!selectedUserForPermissions || !tablePermissionToRemove) return;
+
+    try {
+      setSavingPermissions(true);
+      await api.delete(
+        `/api/auth/users/${selectedUserForPermissions.id}/table-permissions`,
+        {
+          data: {
+            databaseName: tablePermissionToRemove.databaseName,
+            tableName: tablePermissionToRemove.tableName,
+          },
+        }
+      );
+      await loadUserPermissions(selectedUserForPermissions);
+    } catch (error: any) {
+      setError(
+        error.response?.data?.error || "Error eliminando permisos de tabla"
       );
     } finally {
       setSavingPermissions(false);
@@ -426,9 +514,7 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
                       </span>
                     )}
                   </TableCell>
-                  <TableCell>
-                    {new Date(user.createdAt).toLocaleDateString()}
-                  </TableCell>
+                  <TableCell>{formatDate(user.createdAt)}</TableCell>
                   <TableCell>
                     <div className="flex gap-2">
                       <Button
@@ -457,8 +543,8 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
                       </Button>
                       <Button
                         size="sm"
-                        variant="destructive"
                         onClick={() => handleDeleteUser(user)}
+                        className="bg-red-600 hover:bg-red-700 text-white border-red-600"
                       >
                         Eliminar
                       </Button>
@@ -584,252 +670,574 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
       {/* Modal de permisos */}
       {showPermissionsModal && selectedUserForPermissions && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white border border-gray-300 rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4 text-black">
-              Permisos - {selectedUserForPermissions.username}
-            </h3>
-
-            {/* Permisos de Base de Datos */}
-            <div className="mb-6">
-              <h4 className="text-md font-medium mb-3 text-black">
-                Asignar Permisos de Base de Datos
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-black">
-                    Base de Datos
-                  </label>
-                  <Select
-                    value={selectedDatabase}
-                    onValueChange={setSelectedDatabase}
-                  >
-                    <SelectTrigger className="bg-white border-gray-300 text-black">
-                      <SelectValue placeholder="Seleccionar base de datos" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {databases.map((db) => (
-                        <SelectItem key={db} value={db}>
-                          {db}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="dbAccess"
-                    checked={databasePermissions.hasAccess}
-                    onChange={(e) =>
-                      setDatabasePermissions({
-                        hasAccess: e.target.checked,
-                      })
-                    }
-                    className="mr-2"
-                  />
-                  <label htmlFor="dbAccess" className="text-sm text-black">
-                    Acceso Completo (Lectura, Escritura, Eliminación)
-                  </label>
-                </div>
-              </div>
-              <Button
-                onClick={handleAssignDatabasePermissions}
-                disabled={savingPermissions || !selectedDatabase}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {savingPermissions ? "Guardando..." : "Asignar Permisos de BD"}
-              </Button>
-            </div>
-
-            {/* Permisos de Tabla */}
-            <div className="mb-6">
-              <h4 className="text-md font-medium mb-3 text-black">
-                Asignar Permisos de Tabla Específica
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-black">
-                    Base de Datos
-                  </label>
-                  <Select
-                    value={selectedDatabase}
-                    onValueChange={(value) => {
-                      setSelectedDatabase(value);
-                      setSelectedTable("");
-                      loadTables(value);
-                    }}
-                  >
-                    <SelectTrigger className="bg-white border-gray-300 text-black">
-                      <SelectValue placeholder="Seleccionar base de datos" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {databases.map((db) => (
-                        <SelectItem key={db} value={db}>
-                          {db}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-black">
-                    Tabla
-                  </label>
-                  <Select
-                    value={selectedTable}
-                    onValueChange={setSelectedTable}
-                    disabled={!selectedDatabase}
-                  >
-                    <SelectTrigger className="bg-white border-gray-300 text-black">
-                      <SelectValue placeholder="Seleccionar tabla" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tables.map((table) => (
-                        <SelectItem key={table.name} value={table.name}>
-                          {table.schema}.{table.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="tableAccess"
-                    checked={tablePermissions.hasAccess}
-                    onChange={(e) =>
-                      setTablePermissions({
-                        hasAccess: e.target.checked,
-                      })
-                    }
-                    className="mr-2"
-                  />
-                  <label htmlFor="tableAccess" className="text-sm text-black">
-                    Acceso Completo (Lectura, Escritura, Eliminación)
-                  </label>
-                </div>
-              </div>
-              <Button
-                onClick={handleAssignTablePermissions}
-                disabled={
-                  savingPermissions || !selectedDatabase || !selectedTable
-                }
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {savingPermissions
-                  ? "Guardando..."
-                  : "Asignar Permisos de Tabla"}
-              </Button>
-            </div>
-
-            {/* Permisos Actuales */}
-            {loadingPermissions ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-black font-medium">
-                    Cargando permisos...
+          <div className="bg-white border border-gray-200 rounded-2xl p-8 w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">
+                  Gestión de Permisos
+                </h3>
+                <p className="text-gray-600 mt-1">
+                  Usuario:{" "}
+                  <span className="font-semibold text-blue-600">
+                    {selectedUserForPermissions.username}
                   </span>
-                </div>
+                </p>
               </div>
-            ) : (
-              userPermissions && (
-                <div>
-                  <h4 className="text-md font-medium mb-3 text-black">
-                    Permisos Actuales
-                  </h4>
-
-                  {/* Permisos de Base de Datos */}
-                  {userPermissions.databasePermissions.length > 0 && (
-                    <div className="mb-4">
-                      <h5 className="text-sm font-medium mb-2 text-black">
-                        Bases de Datos:
-                      </h5>
-                      <div className="space-y-2">
-                        {userPermissions.databasePermissions.map(
-                          (perm, index) => (
-                            <div
-                              key={index}
-                              className="flex items-center gap-4 text-sm"
-                            >
-                              <span className="font-medium text-black">
-                                {perm.databaseName}
-                              </span>
-                              <span
-                                className={
-                                  perm.canRead &&
-                                  perm.canWrite &&
-                                  perm.canDelete
-                                    ? "text-green-600"
-                                    : "text-red-600"
-                                }
-                              >
-                                {perm.canRead && perm.canWrite && perm.canDelete
-                                  ? "✓"
-                                  : "✗"}{" "}
-                                Acceso Completo
-                              </span>
-                            </div>
-                          )
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Permisos de Tablas */}
-                  {userPermissions.tablePermissions.length > 0 && (
-                    <div>
-                      <h5 className="text-sm font-medium mb-2 text-black">
-                        Tablas Específicas:
-                      </h5>
-                      <div className="space-y-2">
-                        {userPermissions.tablePermissions.map((perm, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center gap-4 text-sm"
-                          >
-                            <span className="font-medium text-black">
-                              {perm.databaseName}.{perm.tableName}
-                            </span>
-                            <span
-                              className={
-                                perm.canRead && perm.canWrite && perm.canDelete
-                                  ? "text-green-600"
-                                  : "text-red-600"
-                              }
-                            >
-                              {perm.canRead && perm.canWrite && perm.canDelete
-                                ? "✓"
-                                : "✗"}{" "}
-                              Acceso Completo
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {userPermissions.databasePermissions.length === 0 &&
-                    userPermissions.tablePermissions.length === 0 && (
-                      <p className="text-gray-600 text-sm">
-                        No hay permisos específicos asignados.
-                      </p>
-                    )}
-                </div>
-              )
-            )}
-
-            <div className="flex justify-end mt-6">
               <Button
                 onClick={() => setShowPermissionsModal(false)}
-                className="bg-[#447cd7] hover:bg-[#3a6bc4] text-white"
+                variant="ghost"
+                size="sm"
+                className="h-10 w-10 p-0 text-gray-600 hover:bg-red-100 hover:text-red-600 transition-colors"
+                title="Cerrar modal"
               >
-                Cerrar
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
               </Button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Panel de Asignación de Permisos */}
+              <div className="space-y-6">
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <svg
+                      className="w-5 h-5 mr-2 text-blue-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                      />
+                    </svg>
+                    Asignar Permisos de Base de Datos
+                  </h4>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Seleccionar Base de Datos
+                      </label>
+                      <Select
+                        value={selectedDatabase}
+                        onValueChange={setSelectedDatabase}
+                      >
+                        <SelectTrigger className="bg-white border-gray-300 hover:border-blue-400 focus:border-blue-500 transition-colors">
+                          <SelectValue placeholder="Elegir base de datos..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {databases.map((db) => (
+                            <SelectItem key={db} value={db}>
+                              <div className="flex items-center">
+                                <svg
+                                  className="w-4 h-4 mr-2 text-blue-500"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+                                  />
+                                </svg>
+                                {db}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                          <svg
+                            className="w-5 h-5 text-blue-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-blue-800">
+                            Acceso Completo
+                          </p>
+                          <p className="text-sm text-blue-700">
+                            El usuario podrá leer, escribir y eliminar en todas
+                            las tablas de esta base de datos
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      onClick={handleAssignDatabasePermissions}
+                      disabled={savingPermissions || !selectedDatabase}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingPermissions ? (
+                        <div className="flex items-center">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                          Asignando...
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <svg
+                            className="w-4 h-4 mr-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                          Asignar Permisos de Base de Datos
+                        </div>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-100">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <svg
+                      className="w-5 h-5 mr-2 text-green-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                      />
+                    </svg>
+                    Asignar Permisos de Tabla Específica
+                  </h4>
+
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Base de Datos
+                        </label>
+                        <Select
+                          value={selectedDatabase}
+                          onValueChange={(value) => {
+                            setSelectedDatabase(value);
+                            setSelectedTable("");
+                            loadTables(value);
+                          }}
+                        >
+                          <SelectTrigger className="bg-white border-gray-300 hover:border-green-400 focus:border-green-500 transition-colors">
+                            <SelectValue placeholder="Elegir base de datos..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {databases.map((db) => (
+                              <SelectItem key={db} value={db}>
+                                <div className="flex items-center">
+                                  <svg
+                                    className="w-4 h-4 mr-2 text-green-500"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+                                    />
+                                  </svg>
+                                  {db}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Tabla
+                        </label>
+                        <Select
+                          value={selectedTable}
+                          onValueChange={setSelectedTable}
+                          disabled={!selectedDatabase}
+                        >
+                          <SelectTrigger className="bg-white border-gray-300 hover:border-green-400 focus:border-green-500 transition-colors disabled:opacity-50">
+                            <SelectValue placeholder="Elegir tabla..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {tables.map((table) => (
+                              <SelectItem key={table.name} value={table.name}>
+                                <div className="flex items-center">
+                                  <svg
+                                    className="w-4 h-4 mr-2 text-green-500"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                                    />
+                                  </svg>
+                                  {table.schema}.{table.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                          <svg
+                            className="w-5 h-5 text-green-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-green-800">
+                            Acceso Completo a Tabla
+                          </p>
+                          <p className="text-sm text-green-700">
+                            El usuario podrá leer, escribir y eliminar en esta
+                            tabla específica
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      onClick={handleAssignTablePermissions}
+                      disabled={
+                        savingPermissions || !selectedDatabase || !selectedTable
+                      }
+                      className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingPermissions ? (
+                        <div className="flex items-center">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                          Asignando...
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <svg
+                            className="w-4 h-4 mr-2"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                          Asignar Permisos de Tabla
+                        </div>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Panel de Permisos Actuales */}
+              <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                <h4 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
+                  <svg
+                    className="w-5 h-5 mr-2 text-gray-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  Permisos Actuales
+                </h4>
+
+                {loadingPermissions ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="flex items-center gap-3">
+                      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-gray-600 font-medium">
+                        Cargando permisos...
+                      </span>
+                    </div>
+                  </div>
+                ) : userPermissions ? (
+                  <div className="space-y-6">
+                    {/* Permisos de Base de Datos */}
+                    {userPermissions.databasePermissions.length > 0 && (
+                      <div>
+                        <h5 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                          <svg
+                            className="w-4 h-4 mr-2 text-blue-500"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+                            />
+                          </svg>
+                          Bases de Datos
+                        </h5>
+                        <div className="space-y-2">
+                          {userPermissions.databasePermissions.map(
+                            (perm, index) => (
+                              <div
+                                key={index}
+                                className="flex items-center justify-between bg-white rounded-lg p-3 border border-gray-200"
+                              >
+                                <span className="font-medium text-gray-900">
+                                  {perm.databaseName}
+                                </span>
+                                <div className="flex items-center">
+                                  <svg
+                                    className="w-4 h-4 text-green-500 mr-1"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    />
+                                  </svg>
+                                  <span className="text-sm text-green-600 font-medium">
+                                    Acceso Completo
+                                  </span>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  onClick={() =>
+                                    handleRemoveDatabasePermissions(
+                                      perm.databaseName
+                                    )
+                                  }
+                                  className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+                                >
+                                  <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M6 18L18 6M6 6l12 12"
+                                    />
+                                  </svg>
+                                </Button>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Permisos de Tablas */}
+                    {userPermissions.tablePermissions.length > 0 && (
+                      <div>
+                        <h5 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                          <svg
+                            className="w-4 h-4 mr-2 text-green-500"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                            />
+                          </svg>
+                          Tablas Específicas
+                        </h5>
+                        <div className="space-y-2">
+                          {userPermissions.tablePermissions.map(
+                            (perm, index) => (
+                              <div
+                                key={index}
+                                className="flex items-center justify-between bg-white rounded-lg p-3 border border-gray-200"
+                              >
+                                <span className="font-medium text-gray-900">
+                                  {perm.databaseName}.{perm.tableName}
+                                </span>
+                                <div className="flex items-center">
+                                  <svg
+                                    className="w-4 h-4 text-green-500 mr-1"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    />
+                                  </svg>
+                                  <span className="text-sm text-green-600 font-medium">
+                                    Acceso Completo
+                                  </span>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  onClick={() =>
+                                    handleRemoveTablePermissions(
+                                      perm.databaseName,
+                                      perm.tableName
+                                    )
+                                  }
+                                  className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+                                >
+                                  <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M6 18L18 6M6 6l12 12"
+                                    />
+                                  </svg>
+                                </Button>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {userPermissions.databasePermissions.length === 0 &&
+                      userPermissions.tablePermissions.length === 0 && (
+                        <div className="text-center py-8">
+                          <svg
+                            className="w-12 h-12 text-gray-400 mx-auto mb-3"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                            />
+                          </svg>
+                          <p className="text-gray-500 text-sm">
+                            No hay permisos específicos asignados
+                          </p>
+                          <p className="text-gray-400 text-xs mt-1">
+                            Asigna permisos usando los paneles de la izquierda
+                          </p>
+                        </div>
+                      )}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Modales de confirmación */}
+      <ConfirmationModal
+        isOpen={showDeleteUserModal}
+        onClose={() => setShowDeleteUserModal(false)}
+        onConfirm={confirmDeleteUser}
+        title="Eliminar Usuario"
+        message={`¿Estás seguro de que quieres eliminar al usuario "${userToDelete?.username}"? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="danger"
+      />
+
+      <ConfirmationModal
+        isOpen={showRemoveDatabasePermissionModal}
+        onClose={() => setShowRemoveDatabasePermissionModal(false)}
+        onConfirm={confirmRemoveDatabasePermissions}
+        title="Eliminar Permisos de Base de Datos"
+        message={`¿Estás seguro de que quieres eliminar los permisos de la base de datos "${databasePermissionToRemove}"?`}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="danger"
+      />
+
+      <ConfirmationModal
+        isOpen={showRemoveTablePermissionModal}
+        onClose={() => setShowRemoveTablePermissionModal(false)}
+        onConfirm={confirmRemoveTablePermissions}
+        title="Eliminar Permisos de Tabla"
+        message={`¿Estás seguro de que quieres eliminar los permisos de la tabla "${tablePermissionToRemove?.databaseName}.${tablePermissionToRemove?.tableName}"?`}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="danger"
+      />
     </div>
   );
 }

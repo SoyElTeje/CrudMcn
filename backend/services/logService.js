@@ -259,19 +259,71 @@ class LogService {
         request.input("endDate", filters.endDate);
       }
 
-      query +=
-        " ORDER BY Timestamp DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY";
+      // Query para contar el total de registros con los mismos filtros
+      let countQuery = `
+        SELECT COUNT(*) as total
+        FROM SYSTEM_LOGS 
+        WHERE 1=1
+      `;
 
-      request.input("limit", limit);
-      request.input("offset", offset);
+      const countRequest = pool.request();
 
-      const result = await request.query(query);
+      // Aplicar los mismos filtros al count
+      if (filters.action) {
+        countQuery += " AND Action = @action";
+        countRequest.input("action", filters.action);
+      }
 
-      return result.recordset.map((log) => ({
-        ...log,
-        OldData: log.OldData ? JSON.parse(log.OldData) : null,
-        NewData: log.NewData ? JSON.parse(log.NewData) : null,
-      }));
+      if (filters.databaseName) {
+        countQuery += " AND DatabaseName = @databaseName";
+        countRequest.input("databaseName", filters.databaseName);
+      }
+
+      if (filters.tableName) {
+        countQuery += " AND TableName = @tableName";
+        countRequest.input("tableName", filters.tableName);
+      }
+
+      if (filters.username) {
+        countQuery += " AND Username LIKE @username";
+        countRequest.input("username", `%${filters.username}%`);
+      }
+
+      if (filters.startDate) {
+        countQuery += " AND Timestamp >= @startDate";
+        countRequest.input("startDate", filters.startDate);
+      }
+
+      if (filters.endDate) {
+        countQuery += " AND Timestamp <= @endDate";
+        countRequest.input("endDate", filters.endDate);
+      }
+
+      // Ejecutar ambas queries en paralelo
+      const [result, countResult] = await Promise.all([
+        request
+          .input("limit", limit)
+          .input("offset", offset)
+          .query(
+            query +
+              " ORDER BY Timestamp DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY"
+          ),
+        countRequest.query(countQuery),
+      ]);
+
+      const totalRecords = countResult.recordset[0].total;
+
+      return {
+        data: result.recordset.map((log) => ({
+          ...log,
+          OldData: log.OldData ? JSON.parse(log.OldData) : null,
+          NewData: log.NewData ? JSON.parse(log.NewData) : null,
+        })),
+        totalRecords,
+        currentPage: Math.floor(offset / limit) + 1,
+        totalPages: Math.ceil(totalRecords / limit),
+        recordsPerPage: limit,
+      };
     } catch (error) {
       console.error("Error obteniendo todos los logs:", error);
       throw error;

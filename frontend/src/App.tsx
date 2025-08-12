@@ -20,6 +20,10 @@ import { ExcelExportModal } from "./components/ExcelExportModal";
 import { Pagination } from "./components/Pagination";
 import { TableCards } from "./components/TableCards";
 import LogsViewer from "./components/LogsViewer";
+import { AdvancedFilters } from "./components/AdvancedFilters";
+import ActivatedTablesManager from "./components/ActivatedTablesManager";
+import { ValidationErrorModal } from "./components/ValidationErrorModal";
+import { formatDate, formatDateTime } from "./lib/dateUtils";
 import "./App.css";
 
 // Base de datos de la aplicación (no editable - contiene información del sistema)
@@ -48,15 +52,64 @@ interface TableStructure {
   primaryKeys: string[];
 }
 
+// Función para formatear valores según el tipo de dato
+function formatCellValue(
+  value: any,
+  columnName: string,
+  tableStructure: TableStructure | null
+): string {
+  if (value === null || value === undefined) {
+    return "null";
+  }
+
+  // Si no tenemos la estructura de la tabla, mostrar el valor como string
+  if (!tableStructure) {
+    return String(value);
+  }
+
+  // Buscar la columna en la estructura de la tabla
+  const column = tableStructure.columns.find(
+    (col) => col.COLUMN_NAME === columnName
+  );
+  if (!column) {
+    return String(value);
+  }
+
+  const dataType = column.DATA_TYPE.toLowerCase();
+
+  // Formatear fechas según el tipo
+  if (dataType.includes("date") || dataType.includes("datetime")) {
+    try {
+      const dateValue = new Date(value);
+      if (isNaN(dateValue.getTime())) {
+        return String(value);
+      }
+
+      // Para campos datetime, mostrar fecha y hora
+      if (dataType.includes("datetime")) {
+        return formatDateTime(dateValue);
+      } else {
+        // Para campos date, mostrar solo fecha
+        return formatDate(dateValue);
+      }
+    } catch (error) {
+      return String(value);
+    }
+  }
+
+  // Para otros tipos de datos, mostrar como string
+  return String(value);
+}
+
 function App() {
   // Estados de autenticación
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [showLogin, setShowLogin] = useState(true);
-  const [currentView, setCurrentView] = useState<"database" | "users" | "logs">(
-    "database"
-  );
+  const [currentView, setCurrentView] = useState<
+    "database" | "users" | "logs" | "activated-tables"
+  >("database");
   const [showTableCards, setShowTableCards] = useState(true);
 
   // Estados de base de datos
@@ -98,10 +151,19 @@ function App() {
   // Estados para exportación de Excel
   const [isExcelExportModalOpen, setIsExcelExportModalOpen] = useState(false);
 
+  // Estados para errores de validación
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [isValidationErrorModalOpen, setIsValidationErrorModalOpen] =
+    useState(false);
+
   // Estados para paginación
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(5);
   const [totalRecords, setTotalRecords] = useState(0);
+
+  // Estados para filtros avanzados
+  const [activeFilters, setActiveFilters] = useState<any[]>([]);
+  const [activeSort, setActiveSort] = useState<any | null>(null);
 
   // Configurar axios con interceptor para token
   const api = axios.create({
@@ -168,6 +230,42 @@ function App() {
     setIsEditModalOpen(true);
   };
 
+  // Función auxiliar para obtener información de la tabla (regular o activada)
+  const getTableInfo = async (tableName: string) => {
+    // Primero buscar en las tablas regulares
+    let selectedTableInfo = tables.find((table) => table.name === tableName);
+
+    // Si no se encuentra en las tablas regulares, buscar en las tablas activadas
+    if (!selectedTableInfo) {
+      try {
+        const activatedTablesResponse = await api.get(
+          "/api/activated-tables/activated"
+        );
+        const activatedTable = activatedTablesResponse.data.find(
+          (table: any) => table.TableName === tableName
+        );
+
+        if (activatedTable) {
+          selectedTableInfo = {
+            name: activatedTable.TableName,
+            database: activatedTable.DatabaseName,
+            schema: activatedTable.DatabaseName,
+          };
+        }
+      } catch (error) {
+        console.warn("Error obteniendo tablas activadas:", error);
+      }
+    }
+
+    if (!selectedTableInfo) {
+      throw new Error(
+        "No se pudo encontrar la base de datos de la tabla seleccionada."
+      );
+    }
+
+    return selectedTableInfo;
+  };
+
   // Función para obtener la estructura de la tabla
   const fetchTableStructure = async (dbName: string, tableName: string) => {
     try {
@@ -187,16 +285,8 @@ function App() {
 
     setAddLoading(true);
     try {
-      // Encontrar la base de datos de la tabla seleccionada
-      const selectedTableInfo = tables.find(
-        (table) => table.name === selectedTable
-      );
-      if (!selectedTableInfo) {
-        throw new Error(
-          "No se pudo encontrar la base de datos de la tabla seleccionada."
-        );
-      }
-
+      // Obtener información de la tabla (regular o activada)
+      const selectedTableInfo = await getTableInfo(selectedTable);
       const dbName = selectedTableInfo.database || selectedTableInfo.schema;
 
       await api.post(
@@ -224,7 +314,16 @@ function App() {
 
       setIsAddModalOpen(false);
     } catch (error: any) {
-      setError(error.response?.data?.error || error.message);
+      // Manejar errores de validación de condiciones específicamente
+      if (
+        error.response?.data?.details &&
+        Array.isArray(error.response.data.details)
+      ) {
+        setValidationErrors(error.response.data.details);
+        setIsValidationErrorModalOpen(true);
+      } else {
+        setError(error.response?.data?.error || error.message);
+      }
     } finally {
       setAddLoading(false);
     }
@@ -236,16 +335,8 @@ function App() {
 
     setEditLoading(true);
     try {
-      // Encontrar la base de datos de la tabla seleccionada
-      const selectedTableInfo = tables.find(
-        (table) => table.name === selectedTable
-      );
-      if (!selectedTableInfo) {
-        throw new Error(
-          "No se pudo encontrar la base de datos de la tabla seleccionada."
-        );
-      }
-
+      // Obtener información de la tabla (regular o activada)
+      const selectedTableInfo = await getTableInfo(selectedTable);
       const dbName = selectedTableInfo.database || selectedTableInfo.schema;
 
       // Crear objeto con valores de clave primaria
@@ -277,7 +368,16 @@ function App() {
       setIsEditModalOpen(false);
       setEditingRecord(null);
     } catch (error: any) {
-      setError(error.response?.data?.error || error.message);
+      // Manejar errores de validación de condiciones específicamente
+      if (
+        error.response?.data?.details &&
+        Array.isArray(error.response.data.details)
+      ) {
+        setValidationErrors(error.response.data.details);
+        setIsValidationErrorModalOpen(true);
+      } else {
+        setError(error.response?.data?.error || error.message);
+      }
     } finally {
       setEditLoading(false);
     }
@@ -295,16 +395,8 @@ function App() {
 
     setDeleteLoading(true);
     try {
-      // Encontrar la base de datos de la tabla seleccionada
-      const selectedTableInfo = tables.find(
-        (table) => table.name === selectedTable
-      );
-      if (!selectedTableInfo) {
-        throw new Error(
-          "No se pudo encontrar la base de datos de la tabla seleccionada."
-        );
-      }
-
+      // Obtener información de la tabla (regular o activada)
+      const selectedTableInfo = await getTableInfo(selectedTable);
       const dbName = selectedTableInfo.database || selectedTableInfo.schema;
 
       // Crear objeto con valores de clave primaria
@@ -390,16 +482,8 @@ function App() {
 
     setBulkDeleteLoading(true);
     try {
-      // Encontrar la base de datos de la tabla seleccionada
-      const selectedTableInfo = tables.find(
-        (table) => table.name === selectedTable
-      );
-      if (!selectedTableInfo) {
-        throw new Error(
-          "No se pudo encontrar la base de datos de la tabla seleccionada."
-        );
-      }
-
+      // Obtener información de la tabla (regular o activada)
+      const selectedTableInfo = await getTableInfo(selectedTable);
       const dbName = selectedTableInfo.database || selectedTableInfo.schema;
 
       await api.delete(
@@ -440,16 +524,8 @@ function App() {
   const handleExcelImportComplete = async (result: any) => {
     // Recargar los datos de la tabla
     if (selectedTable) {
-      // Encontrar la base de datos de la tabla seleccionada
-      const selectedTableInfo = tables.find(
-        (table) => table.name === selectedTable
-      );
-      if (!selectedTableInfo) {
-        throw new Error(
-          "No se pudo encontrar la base de datos de la tabla seleccionada."
-        );
-      }
-
+      // Obtener información de la tabla (regular o activada)
+      const selectedTableInfo = await getTableInfo(selectedTable);
       const dbName = selectedTableInfo.database || selectedTableInfo.schema;
 
       const response = await api.get(
@@ -518,6 +594,11 @@ function App() {
           params: {
             limit: recordsPerPage,
             offset: (newPage - 1) * recordsPerPage,
+            filters:
+              activeFilters.length > 0
+                ? JSON.stringify(activeFilters)
+                : undefined,
+            sort: activeSort ? JSON.stringify(activeSort) : undefined,
           },
         }
       );
@@ -557,10 +638,82 @@ function App() {
           params: {
             limit: newRecordsPerPage,
             offset: 0,
+            filters:
+              activeFilters.length > 0
+                ? JSON.stringify(activeFilters)
+                : undefined,
+            sort: activeSort ? JSON.stringify(activeSort) : undefined,
           },
         }
       );
       setTableData(response.data);
+    } catch (error: any) {
+      setError(error.response?.data?.error || error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Función para manejar cambios en los filtros
+  const handleFiltersChange = async (filters: any[]) => {
+    setActiveFilters(filters);
+    setCurrentPage(1); // Volver a la primera página
+    await fetchTableDataWithFilters(filters, activeSort);
+  };
+
+  // Función para manejar cambios en el ordenamiento
+  const handleSortChange = async (sort: any | null) => {
+    setActiveSort(sort);
+    setCurrentPage(1); // Volver a la primera página
+    await fetchTableDataWithFilters(activeFilters, sort);
+  };
+
+  // Función para limpiar filtros
+  const handleClearFilters = async () => {
+    setActiveFilters([]);
+    setActiveSort(null);
+    setCurrentPage(1);
+    await fetchTableDataWithFilters([], null);
+  };
+
+  // Función para obtener datos de la tabla con filtros
+  const fetchTableDataWithFilters = async (
+    filters: any[],
+    sort: any | null
+  ) => {
+    if (!selectedTable) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Obtener información de la tabla (regular o activada)
+      const selectedTableInfo = await getTableInfo(selectedTable);
+      const dbName = selectedTableInfo.database || selectedTableInfo.schema;
+
+      const response = await api.get(
+        `/api/databases/${dbName}/tables/${selectedTable}/records`,
+        {
+          params: {
+            limit: recordsPerPage,
+            offset: 0,
+            filters: filters.length > 0 ? JSON.stringify(filters) : undefined,
+            sort: sort ? JSON.stringify(sort) : undefined,
+          },
+        }
+      );
+      setTableData(response.data);
+
+      // Actualizar el total de registros con filtros
+      const countResponse = await api.get(
+        `/api/databases/${dbName}/tables/${selectedTable}/count`,
+        {
+          params: {
+            filters: filters.length > 0 ? JSON.stringify(filters) : undefined,
+          },
+        }
+      );
+      setTotalRecords(countResponse.data.count);
     } catch (error: any) {
       setError(error.response?.data?.error || error.message);
     } finally {
@@ -620,48 +773,50 @@ function App() {
 
   // Eliminar el useEffect que dependía de selectedDb ya que ahora cargamos todas las tablas al inicio
 
-  // Fetch table data when table changes
-  useEffect(() => {
+  // Función para cargar datos de la tabla
+  const loadTableData = async () => {
     if (selectedTable && selectedTable.trim() !== "" && isAuthenticated) {
       setLoading(true);
       setError(null);
       setCurrentPage(1); // Reset a la primera página cuando cambia la tabla
+      setActiveFilters([]); // Reset filtros cuando cambia la tabla
+      setActiveSort(null); // Reset ordenamiento cuando cambia la tabla
 
-      // Encontrar la base de datos de la tabla seleccionada
-      const selectedTableInfo = tables.find(
-        (table) => table.name === selectedTable
-      );
-      if (!selectedTableInfo) {
-        setError("No se pudo encontrar la información de la tabla");
+      try {
+        // Obtener información de la tabla (regular o activada)
+        const selectedTableInfo = await getTableInfo(selectedTable);
+        const dbName = selectedTableInfo.database || selectedTableInfo.schema;
+
+        // Obtener datos de la tabla, estructura y total de registros en paralelo
+        const [tableResponse, , totalCount] = await Promise.all([
+          api.get(`/api/databases/${dbName}/tables/${selectedTable}/records`, {
+            params: {
+              limit: recordsPerPage,
+              offset: 0,
+            },
+          }),
+          fetchTableStructure(dbName, selectedTable),
+          fetchTotalRecords(dbName, selectedTable),
+        ]);
+
+        setTableData(tableResponse.data);
+        setTotalRecords(totalCount);
+      } catch (error: any) {
+        setError(error.message || "Error obteniendo información de la tabla");
+      } finally {
         setLoading(false);
-        return;
       }
-
-      const dbName = selectedTableInfo.database || selectedTableInfo.schema;
-
-      // Obtener datos de la tabla, estructura y total de registros en paralelo
-      Promise.all([
-        api.get(`/api/databases/${dbName}/tables/${selectedTable}/records`, {
-          params: {
-            limit: recordsPerPage,
-            offset: 0,
-          },
-        }),
-        fetchTableStructure(dbName, selectedTable),
-        fetchTotalRecords(dbName, selectedTable),
-      ])
-        .then(([tableResponse, , totalCount]) => {
-          setTableData(tableResponse.data);
-          setTotalRecords(totalCount);
-        })
-        .catch((err) => setError(err.response?.data?.error || err.message))
-        .finally(() => setLoading(false));
     } else {
       setTableData(null);
       setTableStructure(null);
       setError(null);
       setTotalRecords(0);
     }
+  };
+
+  // Fetch table data when table changes
+  useEffect(() => {
+    loadTableData();
   }, [selectedTable, isAuthenticated, recordsPerPage, tables]);
 
   // Render
@@ -708,6 +863,15 @@ function App() {
                     className="text-sm"
                   >
                     Logs del Sistema
+                  </Button>
+                  <Button
+                    onClick={() => setCurrentView("activated-tables")}
+                    variant={
+                      currentView === "activated-tables" ? "default" : "outline"
+                    }
+                    className="text-sm"
+                  >
+                    Tablas Activadas
                   </Button>
                 </>
               )}
@@ -797,6 +961,19 @@ function App() {
             </div>
             <LogsViewer />
           </>
+        ) : currentView === "activated-tables" ? (
+          <>
+            <div className="mb-6">
+              <Button
+                onClick={() => setCurrentView("database")}
+                variant="outline"
+                className="mb-4"
+              >
+                ← Volver a las tablas
+              </Button>
+            </div>
+            <ActivatedTablesManager />
+          </>
         ) : (
           <>
             {/* Vista de tarjetas de tablas */}
@@ -866,9 +1043,9 @@ function App() {
                             <h3 className="text-sm font-semibold text-destructive mb-1">
                               Error de Operación
                             </h3>
-                            <p className="text-sm text-foreground leading-relaxed">
+                            <div className="text-sm text-foreground leading-relaxed whitespace-pre-line">
                               {error}
-                            </p>
+                            </div>
                             <button
                               onClick={() => setError(null)}
                               className="mt-3 text-xs text-destructive hover:text-destructive/80 underline"
@@ -958,6 +1135,18 @@ function App() {
                       </div>
                     </div>
 
+                    {/* Componente de filtros avanzados - Siempre visible cuando hay tabla seleccionada */}
+                    {tableStructure && (
+                      <AdvancedFilters
+                        columns={tableStructure.columns}
+                        onFiltersChange={handleFiltersChange}
+                        onSortChange={handleSortChange}
+                        onClearFilters={handleClearFilters}
+                        activeFilters={activeFilters}
+                        activeSort={activeSort}
+                      />
+                    )}
+
                     {tableData.data.length > 0 ? (
                       <div className="border border-border/50 rounded-lg overflow-hidden shadow-sm">
                         {/* Barra de herramientas para eliminación múltiple */}
@@ -1023,7 +1212,7 @@ function App() {
                               {Object.keys(tableData.data[0]).map((col) => (
                                 <TableHead
                                   key={col}
-                                  className="font-semibold text-foreground"
+                                  className="font-semibold text-foreground text-left"
                                 >
                                   {col}
                                 </TableHead>
@@ -1065,14 +1254,18 @@ function App() {
                                   {Object.keys(row).map((col) => (
                                     <TableCell
                                       key={col}
-                                      className="font-mono text-sm"
+                                      className="text-sm text-left"
                                     >
                                       {row[col] === null ? (
                                         <span className="text-muted-foreground italic">
                                           null
                                         </span>
                                       ) : (
-                                        String(row[col])
+                                        formatCellValue(
+                                          row[col],
+                                          col,
+                                          tableStructure
+                                        )
                                       )}
                                     </TableCell>
                                   ))}
@@ -1159,10 +1352,14 @@ function App() {
                             </svg>
                           </div>
                           <p className="text-muted-foreground font-medium">
-                            No hay registros en esta tabla
+                            {activeFilters.length > 0
+                              ? "No se encontraron registros con los filtros aplicados"
+                              : "No hay registros en esta tabla"}
                           </p>
                           <p className="text-sm text-muted-foreground mt-1">
-                            La tabla está vacía o no contiene datos
+                            {activeFilters.length > 0
+                              ? "Intenta ajustar los filtros o usar 'Limpiar Todo' para ver todos los registros"
+                              : "La tabla está vacía o no contiene datos"}
                           </p>
                         </div>
                       </div>
@@ -1273,6 +1470,19 @@ function App() {
           recordsPerPage={recordsPerPage}
           totalRecords={totalRecords}
           token={token || ""}
+          activeFilters={activeFilters}
+          activeSort={activeSort}
+        />
+
+        {/* Modal de errores de validación */}
+        <ValidationErrorModal
+          isOpen={isValidationErrorModalOpen}
+          onClose={() => {
+            setIsValidationErrorModalOpen(false);
+            setValidationErrors([]);
+          }}
+          errors={validationErrors}
+          title="Errores de Validación de Condiciones"
         />
       </div>
     </div>
