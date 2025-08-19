@@ -11,7 +11,22 @@ export function formatDate(date: string | Date | null | undefined): string {
   if (!date) return "";
 
   try {
-    const dateObj = typeof date === "string" ? new Date(date) : date;
+    let dateObj: Date;
+
+    if (typeof date === "string") {
+      // Si es formato ISO (YYYY-MM-DD), parsearlo correctamente para evitar problemas de zona horaria
+      const isoMatch = date.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (isoMatch) {
+        const year = parseInt(isoMatch[1], 10);
+        const month = parseInt(isoMatch[2], 10) - 1; // Los meses van de 0 a 11
+        const day = parseInt(isoMatch[3], 10);
+        dateObj = new Date(year, month, day);
+      } else {
+        dateObj = new Date(date);
+      }
+    } else {
+      dateObj = date;
+    }
 
     // Verificar si la fecha es válida
     if (isNaN(dateObj.getTime())) {
@@ -39,7 +54,22 @@ export function formatDateTime(date: string | Date | null | undefined): string {
   if (!date) return "";
 
   try {
-    const dateObj = typeof date === "string" ? new Date(date) : date;
+    let dateObj: Date;
+
+    if (typeof date === "string") {
+      // Si es formato ISO (YYYY-MM-DD), parsearlo correctamente para evitar problemas de zona horaria
+      const isoMatch = date.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (isoMatch) {
+        const year = parseInt(isoMatch[1], 10);
+        const month = parseInt(isoMatch[2], 10) - 1; // Los meses van de 0 a 11
+        const day = parseInt(isoMatch[3], 10);
+        dateObj = new Date(year, month, day);
+      } else {
+        dateObj = new Date(date);
+      }
+    } else {
+      dateObj = date;
+    }
 
     // Verificar si la fecha es válida
     if (isNaN(dateObj.getTime())) {

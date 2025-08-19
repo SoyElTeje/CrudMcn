@@ -46,9 +46,10 @@ interface UserPermissions {
 interface UserManagementProps {
   token: string;
   isAdmin: boolean;
+  api: any; // Agregar la instancia de axios del App.tsx
 }
 
-export function UserManagement({ token, isAdmin }: UserManagementProps) {
+export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -105,13 +106,6 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
     tableName: string;
   } | null>(null);
 
-  const api = axios.create({
-    baseURL: "http://localhost:3001",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
   // Cargar usuarios
   const loadUsers = async () => {
     try {
@@ -153,13 +147,43 @@ export function UserManagement({ token, isAdmin }: UserManagementProps) {
       return;
     }
 
+    // Debug: Verificar el token
+    console.log("🔍 Debug: Token recibido en UserManagement:", token);
+    console.log("🔍 Debug: Token length:", token?.length);
+    console.log("🔍 Debug: Token substring:", token?.substring(0, 50) + "...");
+
     try {
       setCreatingUser(true);
-      await api.post("/api/auth/users", newUser);
-      setNewUser({ username: "", password: "", isAdmin: false });
-      setShowCreateForm(false);
-      loadUsers();
+
+      // Debug: Verificar headers antes de la petición
+      console.log("🔍 Debug: Headers de la petición:", {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      });
+
+      // Usar axios directamente con el token para evitar problemas con el interceptor
+      const response = await axios.post(
+        "http://localhost:3001/api/auth/users",
+        newUser,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.data.success) {
+        setNewUser({ username: "", password: "", isAdmin: false });
+        setShowCreateForm(false);
+        loadUsers();
+      } else {
+        setError("Error creando usuario");
+      }
     } catch (error: any) {
+      console.log("🔍 Debug: Error completo:", error);
+      console.log("🔍 Debug: Error response:", error.response);
+      console.log("🔍 Debug: Error data:", error.response?.data);
       setError(error.response?.data?.error || "Error creando usuario");
     } finally {
       setCreatingUser(false);

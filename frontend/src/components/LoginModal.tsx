@@ -143,37 +143,6 @@ export function LoginModal({ isOpen, onLogin, onClose }: LoginModalProps) {
             </Button>
           </div>
         </form>
-
-        <div className="mt-6 text-center">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <div className="flex items-start">
-              <svg
-                className="w-5 h-5 text-blue-400 mr-2 mt-0.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <div className="text-left">
-                <p className="text-blue-800 text-sm font-medium mb-1">
-                  Credenciales por defecto:
-                </p>
-                <p className="text-blue-700 text-sm">
-                  Usuario: <strong>admin</strong>
-                </p>
-                <p className="text-blue-700 text-sm">
-                  Contraseña: <strong>admin</strong>
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -24,6 +24,7 @@ import { AdvancedFilters } from "./components/AdvancedFilters";
 import ActivatedTablesManager from "./components/ActivatedTablesManager";
 import { ValidationErrorModal } from "./components/ValidationErrorModal";
 import { formatDate, formatDateTime } from "./lib/dateUtils";
+import { useTableContext } from "./contexts/TableContext";
 import "./App.css";
 
 // Base de datos de la aplicación (no editable - contiene información del sistema)
@@ -77,24 +78,62 @@ function formatCellValue(
 
   const dataType = column.DATA_TYPE.toLowerCase();
 
-  // Formatear fechas según el tipo
+  // Para fechas, formatear de manera linda
   if (dataType.includes("date") || dataType.includes("datetime")) {
-    try {
-      const dateValue = new Date(value);
-      if (isNaN(dateValue.getTime())) {
-        return String(value);
-      }
+    // DEBUG: Log para ver el valor original recibido del backend
+    console.log(
+      `🔍 DEBUG FRONTEND - Campo: ${columnName}, Valor original:`,
+      value
+    );
+    console.log(
+      `🔍 DEBUG FRONTEND - Campo: ${columnName}, Tipo de valor:`,
+      typeof value
+    );
 
-      // Para campos datetime, mostrar fecha y hora
-      if (dataType.includes("datetime")) {
-        return formatDateTime(dateValue);
-      } else {
-        // Para campos date, mostrar solo fecha
-        return formatDate(dateValue);
+    // Función simple para convertir ISO a DD/MM/AAAA
+    const formatDateFromISO = (dateString: string) => {
+      try {
+        // Si es un string ISO como "2004-10-10T00:00:00.000Z"
+        if (typeof dateString === "string" && dateString.includes("T")) {
+          // Parsear manualmente sin usar new Date() para evitar conversión de zona horaria
+          const isoMatch = dateString.match(
+            /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/
+          );
+          if (isoMatch) {
+            const [, year, month, day, hours, minutes] = isoMatch;
+
+            // Si es datetime, incluir hora y minutos
+            if (dataType.includes("datetime")) {
+              return `${day}/${month}/${year} ${hours}:${minutes}`;
+            } else {
+              // Si es solo date
+              return `${day}/${month}/${year}`;
+            }
+          }
+        }
+
+        // Si es un string simple como "2004-10-10"
+        if (
+          typeof dateString === "string" &&
+          dateString.match(/^\d{4}-\d{2}-\d{2}/)
+        ) {
+          const [year, month, day] = dateString.split("-");
+          if (dataType.includes("datetime")) {
+            return `${day}/${month}/${year} 00:00`;
+          } else {
+            return `${day}/${month}/${year}`;
+          }
+        }
+
+        // Si no se puede parsear, devolver el valor original
+        return String(dateString);
+      } catch (error) {
+        console.log(`🔍 DEBUG FRONTEND - Error formateando fecha:`, error);
+        return String(dateString);
       }
-    } catch (error) {
-      return String(value);
-    }
+    };
+
+    return formatDateFromISO(value);
   }
 
   // Para otros tipos de datos, mostrar como string
@@ -111,6 +150,9 @@ function App() {
     "database" | "users" | "logs" | "activated-tables"
   >("database");
   const [showTableCards, setShowTableCards] = useState(true);
+
+  // Contexto para comunicación entre componentes
+  const { setRefreshTables } = useTableContext();
 
   // Estados de base de datos
   const [tables, setTables] = useState<TableInfo[]>([]);
@@ -177,6 +219,21 @@ function App() {
     }
     return config;
   });
+
+  // Agregar interceptor de respuesta para manejar errores de autenticación
+  api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      // Si el error es 401 (Unauthorized) o 403 (Forbidden), hacer logout automático
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        console.log(
+          "Token expirado o inválido, cerrando sesión automáticamente"
+        );
+        handleLogout();
+      }
+      return Promise.reject(error);
+    }
+  );
 
   // Función para manejar login exitoso
   const handleLogin = (newToken: string, user: any) => {
@@ -528,23 +585,26 @@ function App() {
       const selectedTableInfo = await getTableInfo(selectedTable);
       const dbName = selectedTableInfo.database || selectedTableInfo.schema;
 
-      const response = await api.get(
-        `/api/databases/${dbName}/tables/${selectedTable}/records`,
-        {
+      // Obtener datos actualizados y total de registros en paralelo
+      const [response, newTotal] = await Promise.all([
+        api.get(`/api/databases/${dbName}/tables/${selectedTable}/records`, {
           params: {
             limit: recordsPerPage,
             offset: (currentPage - 1) * recordsPerPage,
           },
-        }
-      );
+        }),
+        fetchTotalRecords(dbName, selectedTable),
+      ]);
+
       setTableData(response.data);
+      setTotalRecords(newTotal);
     }
 
     // Mostrar mensaje de éxito
     const message = `Importación exitosa: ${
-      result.insertedRows
+      result.data?.successCount || result.insertedRows || 0
     } registros insertados${
-      result.skippedRows > 0 ? `, ${result.skippedRows} registros omitidos` : ""
+      result.data?.errorCount > 0 ? `, ${result.data.errorCount} errores` : ""
     }`;
     setImportSuccessMessage(message);
 
@@ -721,55 +781,56 @@ function App() {
     }
   };
 
+  // Función para cargar todas las tablas accesibles
+  const fetchAccessibleTables = async () => {
+    if (!isAuthenticated) return;
+
+    try {
+      // Obtener solo las bases de datos a las que el usuario tiene acceso
+      const res = await api.get("/api/databases");
+      const dbList = res.data;
+
+      const allTables: TableInfo[] = [];
+      for (const db of dbList) {
+        // Saltar la base de datos de la aplicación
+        if (db === APP_DATABASE) {
+          console.log(`Omitiendo base de datos de la aplicación: ${db}`);
+          continue;
+        }
+
+        try {
+          const tablesResponse = await api.get(`/api/databases/${db}/tables`);
+          const dbTables = tablesResponse.data.map((table: any) => ({
+            ...table,
+            database: db,
+          }));
+          allTables.push(...dbTables);
+        } catch (error: any) {
+          // Solo loggear el error, no fallar completamente
+          console.warn(
+            `No se pudieron cargar las tablas de ${db}: ${
+              error.response?.data?.error || error.message
+            }`
+          );
+          // Continuar con las otras bases de datos
+        }
+      }
+      setTables(allTables);
+    } catch (error) {
+      console.error("Error fetching accessible databases:", error);
+      setTables([]);
+    }
+  };
+
   // Fetch accessible databases and their tables on mount
   useEffect(() => {
-    if (isAuthenticated) {
-      // Obtener solo las bases de datos a las que el usuario tiene acceso
-      api
-        .get("/api/databases")
-        .then((res) => {
-          const dbList = res.data;
-
-          // Obtener tablas solo de las bases de datos accesibles (excluyendo la base de datos de la aplicación)
-          const fetchAccessibleTables = async () => {
-            const allTables: TableInfo[] = [];
-            for (const db of dbList) {
-              // Saltar la base de datos de la aplicación
-              if (db === APP_DATABASE) {
-                console.log(`Omitiendo base de datos de la aplicación: ${db}`);
-                continue;
-              }
-
-              try {
-                const tablesResponse = await api.get(
-                  `/api/databases/${db}/tables`
-                );
-                const dbTables = tablesResponse.data.map((table: any) => ({
-                  ...table,
-                  database: db,
-                }));
-                allTables.push(...dbTables);
-              } catch (error: any) {
-                // Solo loggear el error, no fallar completamente
-                console.warn(
-                  `No se pudieron cargar las tablas de ${db}: ${
-                    error.response?.data?.error || error.message
-                  }`
-                );
-                // Continuar con las otras bases de datos
-              }
-            }
-            setTables(allTables);
-          };
-
-          fetchAccessibleTables();
-        })
-        .catch((error) => {
-          console.error("Error fetching accessible databases:", error);
-          setTables([]);
-        });
-    }
+    fetchAccessibleTables();
   }, [isAuthenticated]);
+
+  // Configurar la función de actualización en el contexto
+  useEffect(() => {
+    setRefreshTables(() => fetchAccessibleTables);
+  }, [isAuthenticated, setRefreshTables]);
 
   // Eliminar el useEffect que dependía de selectedDb ya que ahora cargamos todas las tablas al inicio
 
@@ -943,10 +1004,21 @@ function App() {
                 ← Volver a las tablas
               </Button>
             </div>
-            <UserManagement
-              token={token!}
-              isAdmin={currentUser?.isAdmin || false}
-            />
+            {(() => {
+              console.log(
+                "🔍 Debug: Token en App.tsx antes de pasar a UserManagement:",
+                token
+              );
+              console.log("🔍 Debug: Token length:", token?.length);
+              console.log("🔍 Debug: Current user:", currentUser);
+              return (
+                <UserManagement
+                  token={token!}
+                  isAdmin={currentUser?.isAdmin || false}
+                  api={api}
+                />
+              );
+            })()}
           </>
         ) : currentView === "logs" ? (
           <>
@@ -1470,8 +1542,6 @@ function App() {
           recordsPerPage={recordsPerPage}
           totalRecords={totalRecords}
           token={token || ""}
-          activeFilters={activeFilters}
-          activeSort={activeSort}
         />
 
         {/* Modal de errores de validación */}

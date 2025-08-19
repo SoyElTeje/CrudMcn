@@ -8,6 +8,7 @@ import {
   SelectContent,
   SelectItem,
 } from "./ui/select";
+import { useTableContext } from "../contexts/TableContext";
 
 interface DatabaseInfo {
   DatabaseName: string;
@@ -40,6 +41,7 @@ interface ColumnStructure {
 }
 
 interface TableCondition {
+  id?: number;
   columnName: string;
   dataType: string;
   conditionType: string;
@@ -62,6 +64,9 @@ const ActivatedTablesManager: React.FC = () => {
     "list" | "activate" | "manage" | "edit"
   >("list");
   const [editingTable, setEditingTable] = useState<ActivatedTable | null>(null);
+
+  // Contexto para comunicación con App.tsx
+  const { refreshTables } = useTableContext();
 
   const api = {
     get: async (url: string) => {
@@ -149,9 +154,13 @@ const ActivatedTablesManager: React.FC = () => {
     tableName: string
   ) => {
     try {
+      console.log(
+        `🔍 Fetching table structure for ${databaseName}.${tableName}`
+      );
       const data = await api.get(
         `/api/activated-tables/structure/${databaseName}/${tableName}`
       );
+      console.log(`✅ Table structure received:`, data);
       setTableStructure(data);
 
       // Inicializar condiciones vacías para cada columna
@@ -164,6 +173,7 @@ const ActivatedTablesManager: React.FC = () => {
           isRequired: false,
         })
       );
+      console.log(`✅ Initial conditions created:`, initialConditions);
       setConditions(initialConditions);
     } catch (err) {
       console.error("Error fetching table structure:", err);
@@ -179,9 +189,12 @@ const ActivatedTablesManager: React.FC = () => {
         `/api/activated-tables/conditions/${databaseName}/${tableName}`
       );
 
+      console.log(`🔍 Raw conditions from database:`, data);
+
       // Convertir las condiciones del backend al formato del frontend
       const convertedConditions: TableCondition[] = data.map(
         (condition: any) => ({
+          id: condition.Id,
           columnName: condition.ColumnName,
           dataType: condition.DataType,
           conditionType: condition.ConditionType || "",
@@ -190,9 +203,18 @@ const ActivatedTablesManager: React.FC = () => {
         })
       );
 
-      setConditions(convertedConditions);
+      // Solo actualizar las condiciones si hay datos, sino mantener las iniciales
+      if (convertedConditions.length > 0) {
+        console.log(`✅ Conditions loaded from database:`, convertedConditions);
+        setConditions(convertedConditions);
+      } else {
+        console.log(
+          `ℹ️ No conditions found in database, keeping initial conditions`
+        );
+      }
     } catch (err) {
       console.error("Error fetching table conditions:", err);
+      console.log(`ℹ️ Error loading conditions, keeping initial conditions`);
     }
   };
 
@@ -322,6 +344,11 @@ const ActivatedTablesManager: React.FC = () => {
       setError(null);
       setCurrentView("list");
       fetchActivatedTables();
+
+      // Actualizar la lista de tablas en App.tsx
+      if (typeof refreshTables === "function") {
+        refreshTables();
+      }
     } catch (err: any) {
       setError(err.message || "Error activando tabla");
     } finally {
@@ -337,6 +364,11 @@ const ActivatedTablesManager: React.FC = () => {
       });
 
       fetchActivatedTables();
+
+      // Actualizar la lista de tablas en App.tsx
+      if (typeof refreshTables === "function") {
+        refreshTables();
+      }
     } catch (err: any) {
       setError(err.message || "Error desactivando tabla");
     }
@@ -352,19 +384,46 @@ const ActivatedTablesManager: React.FC = () => {
     setConditions(newConditions);
   };
 
+  const addConditionForColumn = (columnName: string, dataType: string) => {
+    const newCondition: TableCondition = {
+      columnName,
+      dataType,
+      conditionType: "",
+      conditionValue: "",
+      isRequired: false,
+    };
+    setConditions([...conditions, newCondition]);
+  };
+
+  const removeCondition = (index: number) => {
+    const newConditions = conditions.filter((_, i) => i !== index);
+    setConditions(newConditions);
+  };
+
+  const getConditionsForColumn = (columnName: string) => {
+    return conditions.filter(
+      (condition) => condition.columnName === columnName
+    );
+  };
+
   const renderConditionInput = (condition: TableCondition, index: number) => {
     const { dataType, conditionType } = condition;
 
     switch (conditionType) {
       case "length":
+        const currentValue = condition.conditionValue
+          ? JSON.parse(condition.conditionValue)
+          : {};
         return (
           <div className="flex gap-2">
             <input
               type="number"
               placeholder="Min"
+              value={currentValue.min || ""}
               className="flex-1 px-2 py-1 border rounded text-gray-900 bg-white"
               onChange={(e) => {
                 const value = JSON.stringify({
+                  ...currentValue,
                   min: parseInt(e.target.value) || undefined,
                 });
                 handleConditionChange(index, "conditionValue", value);
@@ -373,11 +432,9 @@ const ActivatedTablesManager: React.FC = () => {
             <input
               type="number"
               placeholder="Max"
+              value={currentValue.max || ""}
               className="flex-1 px-2 py-1 border rounded text-gray-900 bg-white"
               onChange={(e) => {
-                const currentValue = condition.conditionValue
-                  ? JSON.parse(condition.conditionValue)
-                  : {};
                 const value = JSON.stringify({
                   ...currentValue,
                   max: parseInt(e.target.value) || undefined,
@@ -395,6 +452,11 @@ const ActivatedTablesManager: React.FC = () => {
           <input
             type="text"
             placeholder="Texto"
+            value={
+              condition.conditionValue
+                ? JSON.parse(condition.conditionValue).text || ""
+                : ""
+            }
             className="w-full px-2 py-1 border rounded text-gray-900 bg-white"
             onChange={(e) => {
               const value = JSON.stringify({ text: e.target.value });
@@ -408,6 +470,11 @@ const ActivatedTablesManager: React.FC = () => {
           <input
             type="text"
             placeholder="Patrón regex"
+            value={
+              condition.conditionValue
+                ? JSON.parse(condition.conditionValue).pattern || ""
+                : ""
+            }
             className="w-full px-2 py-1 border rounded text-gray-900 bg-white"
             onChange={(e) => {
               const value = JSON.stringify({ pattern: e.target.value });
@@ -418,14 +485,19 @@ const ActivatedTablesManager: React.FC = () => {
 
       case "range":
         if (dataType === "numeric") {
+          const currentValue = condition.conditionValue
+            ? JSON.parse(condition.conditionValue)
+            : {};
           return (
             <div className="flex gap-2">
               <input
                 type="number"
                 placeholder="Min"
+                value={currentValue.min || ""}
                 className="flex-1 px-2 py-1 border rounded text-gray-900 bg-white"
                 onChange={(e) => {
                   const value = JSON.stringify({
+                    ...currentValue,
                     min: parseFloat(e.target.value) || undefined,
                   });
                   handleConditionChange(index, "conditionValue", value);
@@ -434,11 +506,9 @@ const ActivatedTablesManager: React.FC = () => {
               <input
                 type="number"
                 placeholder="Max"
+                value={currentValue.max || ""}
                 className="flex-1 px-2 py-1 border rounded text-gray-900 bg-white"
                 onChange={(e) => {
-                  const currentValue = condition.conditionValue
-                    ? JSON.parse(condition.conditionValue)
-                    : {};
                   const value = JSON.stringify({
                     ...currentValue,
                     max: parseFloat(e.target.value) || undefined,
@@ -449,23 +519,28 @@ const ActivatedTablesManager: React.FC = () => {
             </div>
           );
         } else if (dataType === "date") {
+          const currentValue = condition.conditionValue
+            ? JSON.parse(condition.conditionValue)
+            : {};
           return (
             <div className="flex gap-2">
               <input
                 type="date"
+                value={currentValue.min || ""}
                 className="flex-1 px-2 py-1 border rounded text-gray-900 bg-white"
                 onChange={(e) => {
-                  const value = JSON.stringify({ min: e.target.value });
+                  const value = JSON.stringify({
+                    ...currentValue,
+                    min: e.target.value,
+                  });
                   handleConditionChange(index, "conditionValue", value);
                 }}
               />
               <input
                 type="date"
+                value={currentValue.max || ""}
                 className="flex-1 px-2 py-1 border rounded text-gray-900 bg-white"
                 onChange={(e) => {
-                  const currentValue = condition.conditionValue
-                    ? JSON.parse(condition.conditionValue)
-                    : {};
                   const value = JSON.stringify({
                     ...currentValue,
                     max: e.target.value,
@@ -484,6 +559,11 @@ const ActivatedTablesManager: React.FC = () => {
           <input
             type="number"
             placeholder="Valor"
+            value={
+              condition.conditionValue
+                ? JSON.parse(condition.conditionValue).value || ""
+                : ""
+            }
             className="w-full px-2 py-1 border rounded text-gray-900 bg-white"
             onChange={(e) => {
               const value = JSON.stringify({
@@ -499,6 +579,11 @@ const ActivatedTablesManager: React.FC = () => {
         return (
           <input
             type="date"
+            value={
+              condition.conditionValue
+                ? JSON.parse(condition.conditionValue).date || ""
+                : ""
+            }
             className="w-full px-2 py-1 border rounded text-gray-900 bg-white"
             onChange={(e) => {
               const value = JSON.stringify({ date: e.target.value });
@@ -787,7 +872,17 @@ const ActivatedTablesManager: React.FC = () => {
             </div>
 
             {/* Estructura y condiciones */}
-            {selectedDatabase && selectedTable && tableStructure.length > 0 && (
+            {(() => {
+              console.log(`🔍 Render debug:`, {
+                selectedDatabase,
+                selectedTable,
+                tableStructureLength: tableStructure.length,
+                conditionsLength: conditions.length,
+              });
+              return (
+                selectedDatabase && selectedTable && tableStructure.length > 0
+              );
+            })() && (
               <div>
                 <h4 className="text-md font-medium text-gray-900 mb-3">
                   Configurar Condiciones por Columna
@@ -927,93 +1022,156 @@ const ActivatedTablesManager: React.FC = () => {
             </div>
 
             {/* Estructura y condiciones */}
-            {tableStructure.length > 0 && (
+            {(() => {
+              console.log(`🔍 Edit view debug:`, {
+                tableStructureLength: tableStructure.length,
+                conditionsLength: conditions.length,
+                currentView,
+              });
+              return tableStructure.length > 0;
+            })() && (
               <div>
                 <h4 className="text-md font-medium text-gray-900 mb-3">
                   Configurar Condiciones por Columna
                 </h4>
-                <div className="space-y-4">
-                  {conditions.map((condition, index) => (
-                    <div key={index} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <h5 className="font-medium text-gray-900">
-                            {condition.columnName}
-                          </h5>
-                          <p className="text-sm text-gray-500">
-                            Tipo: {condition.dataType}
-                          </p>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <label className="flex items-center">
-                            <input
-                              type="checkbox"
-                              checked={condition.isRequired}
-                              onChange={(e) =>
-                                handleConditionChange(
-                                  index,
-                                  "isRequired",
-                                  e.target.checked
-                                )
-                              }
-                              className="mr-2"
-                            />
-                            <span className="text-sm text-gray-900">
-                              Requerido
-                            </span>
-                          </label>
-                        </div>
-                      </div>
+                <div className="space-y-6">
+                  {tableStructure.map((column) => {
+                    const columnConditions = getConditionsForColumn(
+                      column.ColumnName
+                    );
+                    const dataType = getDataType(column.DataType);
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Tipo de Condición
-                          </label>
-                          <Select
-                            value={condition.conditionType}
-                            onValueChange={(value) =>
-                              handleConditionChange(
-                                index,
-                                "conditionType",
-                                value
-                              )
+                    return (
+                      <div
+                        key={column.ColumnName}
+                        className="border rounded-lg p-4"
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h5 className="font-medium text-gray-900">
+                              {column.ColumnName}
+                            </h5>
+                            <p className="text-sm text-gray-500">
+                              Tipo: {dataType} ({column.DataType})
+                            </p>
+                          </div>
+                          <button
+                            onClick={() =>
+                              addConditionForColumn(column.ColumnName, dataType)
                             }
+                            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
                           >
-                            <SelectTrigger className="bg-primary text-white border-primary">
-                              <SelectValue placeholder="Seleccionar condición" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-primary text-white">
-                              <SelectItem
-                                value="none"
-                                className="text-white hover:bg-accent"
-                              >
-                                Sin condición
-                              </SelectItem>
-                              {getConditionTypes(condition.dataType).map(
-                                (type) => (
-                                  <SelectItem
-                                    key={type.value}
-                                    value={type.value}
-                                    className="text-white hover:bg-accent"
-                                  >
-                                    {type.label}
-                                  </SelectItem>
-                                )
-                              )}
-                            </SelectContent>
-                          </Select>
+                            + Agregar Condición
+                          </button>
                         </div>
 
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Valor de Condición
-                          </label>
-                          {renderConditionInput(condition, index)}
-                        </div>
+                        {columnConditions.length === 0 ? (
+                          <p className="text-sm text-gray-500 italic">
+                            No hay condiciones configuradas para esta columna
+                          </p>
+                        ) : (
+                          <div className="space-y-3">
+                            {columnConditions.map((condition, index) => {
+                              const globalIndex = conditions.findIndex(
+                                (c) => c === condition
+                              );
+                              return (
+                                <div
+                                  key={globalIndex}
+                                  className="border-l-4 border-blue-200 pl-4 py-2"
+                                >
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium text-gray-700">
+                                      Condición {index + 1}
+                                    </span>
+                                    <button
+                                      onClick={() =>
+                                        removeCondition(globalIndex)
+                                      }
+                                      className="text-red-600 hover:text-red-800 text-sm"
+                                    >
+                                      Eliminar
+                                    </button>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Tipo de Condición
+                                      </label>
+                                      <Select
+                                        value={condition.conditionType}
+                                        onValueChange={(value) =>
+                                          handleConditionChange(
+                                            globalIndex,
+                                            "conditionType",
+                                            value
+                                          )
+                                        }
+                                      >
+                                        <SelectTrigger className="bg-primary text-white border-primary">
+                                          <SelectValue placeholder="Seleccionar condición" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-primary text-white">
+                                          <SelectItem
+                                            value="none"
+                                            className="text-white hover:bg-accent"
+                                          >
+                                            Sin condición
+                                          </SelectItem>
+                                          {getConditionTypes(
+                                            condition.dataType
+                                          ).map((type) => (
+                                            <SelectItem
+                                              key={type.value}
+                                              value={type.value}
+                                              className="text-white hover:bg-accent"
+                                            >
+                                              {type.label}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Valor de Condición
+                                      </label>
+                                      {renderConditionInput(
+                                        condition,
+                                        globalIndex
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-2">
+                                    <label className="flex items-center">
+                                      <input
+                                        type="checkbox"
+                                        checked={condition.isRequired}
+                                        onChange={(e) =>
+                                          handleConditionChange(
+                                            globalIndex,
+                                            "isRequired",
+                                            e.target.checked
+                                          )
+                                        }
+                                        className="mr-2"
+                                      />
+                                      <span className="text-sm text-gray-900">
+                                        Requerido
+                                      </span>
+                                    </label>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
