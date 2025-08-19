@@ -98,18 +98,41 @@ export function AddRecordModal({
         }
       }
 
-      // Validar restricciones numéricas (ej: > 0)
-      if (checkClause.includes(">")) {
+      // Validar restricciones numéricas con rango (ej: >= 1 AND <= 7)
+      const rangeMatch = checkClause.match(
+        />=\s*\((\d+)\)\s*AND.*<=\s*\((\d+)\)/
+      );
+      if (rangeMatch) {
+        const minValue = parseFloat(rangeMatch[1]);
+        const maxValue = parseFloat(rangeMatch[2]);
         const numericValue = parseFloat(value);
-        if (isNaN(numericValue) || numericValue <= 0) {
-          return "El valor debe ser mayor a 0";
+
+        if (isNaN(numericValue)) {
+          return "El valor debe ser un número válido";
+        }
+
+        if (numericValue < minValue || numericValue > maxValue) {
+          return `El valor debe estar entre ${minValue} y ${maxValue}`;
         }
       }
-
-      if (checkClause.includes("<")) {
-        const numericValue = parseFloat(value);
-        if (isNaN(numericValue) || numericValue >= 0) {
-          return "El valor debe ser menor a 0";
+      // Validar restricciones numéricas simples (ej: > 0)
+      else if (checkClause.includes(">") && !checkClause.includes(">=")) {
+        const match = checkClause.match(/>\s*(\d+)/);
+        if (match) {
+          const minValue = parseFloat(match[1]);
+          const numericValue = parseFloat(value);
+          if (isNaN(numericValue) || numericValue <= minValue) {
+            return `El valor debe ser mayor a ${minValue}`;
+          }
+        }
+      } else if (checkClause.includes("<") && !checkClause.includes("<=")) {
+        const match = checkClause.match(/<\s*(\d+)/);
+        if (match) {
+          const maxValue = parseFloat(match[1]);
+          const numericValue = parseFloat(value);
+          if (isNaN(numericValue) || numericValue >= maxValue) {
+            return `El valor debe ser menor a ${maxValue}`;
+          }
         }
       }
 

@@ -20,6 +20,7 @@ interface PreviewData {
     insertableColumns: string[];
     identityColumns: string[];
   };
+  ignoreHeaders?: boolean;
 }
 
 export function ExcelImportModal({
@@ -34,6 +35,8 @@ export function ExcelImportModal({
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const [ignoreHeaders, setIgnoreHeaders] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -62,6 +65,7 @@ export function ExcelImportModal({
     try {
       const formData = new FormData();
       formData.append("excelFile", selectedFile);
+      formData.append("ignoreHeaders", ignoreHeaders.toString());
 
       const response = await api.post(
         `/api/databases/${databaseName}/tables/${tableName}/preview-excel`,
@@ -83,6 +87,34 @@ export function ExcelImportModal({
     }
   };
 
+  const handleDownloadTemplate = async () => {
+    setDownloadingTemplate(true);
+    setError(null);
+
+    try {
+      const response = await api.get(
+        `/api/databases/${databaseName}/tables/${tableName}/download-template`,
+        {
+          responseType: "blob",
+        }
+      );
+
+      // Crear un enlace temporal para descargar el archivo
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `template_${tableName}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      setError(error.response?.data?.error || "Error al descargar el template");
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
+
   const handleImport = async () => {
     if (!selectedFile) return;
 
@@ -92,6 +124,7 @@ export function ExcelImportModal({
     try {
       const formData = new FormData();
       formData.append("excelFile", selectedFile);
+      formData.append("ignoreHeaders", ignoreHeaders.toString());
 
       const response = await api.post(
         `/api/databases/${databaseName}/tables/${tableName}/import-excel`,
@@ -117,6 +150,7 @@ export function ExcelImportModal({
     setSelectedFile(null);
     setPreviewData(null);
     setError(null);
+    setIgnoreHeaders(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -132,6 +166,70 @@ export function ExcelImportModal({
           Importar datos desde Excel - {databaseName}.{tableName}
         </h3>
 
+        {/* Botón para descargar template */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-md font-medium text-black">
+              Template de Excel
+            </h4>
+            <Button
+              onClick={handleDownloadTemplate}
+              disabled={downloadingTemplate}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              {downloadingTemplate ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Descargando...
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  Descargar Template
+                </div>
+              )}
+            </Button>
+          </div>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-start">
+              <svg
+                className="w-5 h-5 text-blue-400 mr-2 mt-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <div className="text-left">
+                <p className="text-blue-800 text-sm font-medium mb-1">
+                  Template de Excel
+                </p>
+                <p className="text-blue-700 text-sm">
+                  Descarga un archivo Excel con los headers de la tabla para que
+                  puedas llenarlo manualmente y luego importarlo.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Selección de archivo */}
         <div className="mb-6">
           <label className="block text-sm font-medium mb-2 text-black">
@@ -146,6 +244,29 @@ export function ExcelImportModal({
           />
           <p className="text-sm text-gray-600 mt-1">
             Formatos soportados: .xlsx, .xls, .csv (máximo 10MB)
+          </p>
+        </div>
+
+        {/* Opción para ignorar headers */}
+        <div className="mb-6">
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="ignoreHeaders"
+              checked={ignoreHeaders}
+              onChange={(e) => setIgnoreHeaders(e.target.checked)}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+            />
+            <label
+              htmlFor="ignoreHeaders"
+              className="ml-2 text-sm font-medium text-black"
+            >
+              Ignorar primera fila (headers)
+            </label>
+          </div>
+          <p className="text-sm text-gray-600 mt-1 ml-6">
+            Marca esta opción si el excel que deseas importar tiene el título de
+            las columnas.
           </p>
         </div>
 
@@ -256,18 +377,20 @@ export function ExcelImportModal({
               </h5>
               <div className="overflow-x-auto">
                 <table className="min-w-full border border-gray-300">
-                  <thead>
-                    <tr>
-                      {previewData.headers.map((header, index) => (
-                        <th
-                          key={index}
-                          className="border border-gray-300 px-3 py-2 text-sm font-medium text-black bg-gray-100"
-                        >
-                          {header}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
+                  {!previewData.ignoreHeaders && (
+                    <thead>
+                      <tr>
+                        {previewData.headers.map((header, index) => (
+                          <th
+                            key={index}
+                            className="border border-gray-300 px-3 py-2 text-sm font-medium text-black bg-gray-100"
+                          >
+                            {header}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                  )}
                   <tbody>
                     {previewData.previewRows.map((row, rowIndex) => (
                       <tr key={rowIndex}>
