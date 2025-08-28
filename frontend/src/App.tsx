@@ -80,16 +80,6 @@ function formatCellValue(
 
   // Para fechas, formatear de manera linda
   if (dataType.includes("date") || dataType.includes("datetime")) {
-    // DEBUG: Log para ver el valor original recibido del backend
-    console.log(
-      `🔍 DEBUG FRONTEND - Campo: ${columnName}, Valor original:`,
-      value
-    );
-    console.log(
-      `🔍 DEBUG FRONTEND - Campo: ${columnName}, Tipo de valor:`,
-      typeof value
-    );
-
     // Función simple para convertir ISO a DD/MM/AAAA
     const formatDateFromISO = (dateString: string) => {
       try {
@@ -128,7 +118,6 @@ function formatCellValue(
         // Si no se puede parsear, devolver el valor original
         return String(dateString);
       } catch (error) {
-        console.log(`🔍 DEBUG FRONTEND - Error formateando fecha:`, error);
         return String(dateString);
       }
     };
@@ -189,6 +178,7 @@ function App() {
   const [importSuccessMessage, setImportSuccessMessage] = useState<
     string | null
   >(null);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
 
   // Estados para exportación de Excel
   const [isExcelExportModalOpen, setIsExcelExportModalOpen] = useState(false);
@@ -379,7 +369,65 @@ function App() {
         setValidationErrors(error.response.data.details);
         setIsValidationErrorModalOpen(true);
       } else {
-        setError(error.response?.data?.error || error.message);
+        // Mejorar mensajes de error para ser más expresivos
+        let errorMessage = error.response?.data?.error || error.message;
+
+        // Detectar errores específicos de SQL Server
+        if (error.response?.data?.error) {
+          const errorText = error.response.data.error.toLowerCase();
+
+          if (
+            errorText.includes("primary key") ||
+            errorText.includes("duplicate key") ||
+            errorText.includes("unique constraint")
+          ) {
+            errorMessage =
+              "Ya existe un registro con la misma clave primaria. Verifique que los valores de clave primaria sean únicos.";
+          } else if (
+            errorText.includes("foreign key") ||
+            errorText.includes("fk_")
+          ) {
+            errorMessage =
+              "Los datos hacen referencia a un registro que no existe en otra tabla. Verifique las referencias.";
+          } else if (
+            errorText.includes("check constraint") ||
+            errorText.includes("check_")
+          ) {
+            errorMessage =
+              "Los datos no cumplen con las restricciones de validación configuradas en la tabla.";
+          } else if (
+            errorText.includes("cannot insert the value null") ||
+            errorText.includes("null value")
+          ) {
+            errorMessage =
+              "No se puede insertar un valor nulo en un campo requerido. Complete todos los campos obligatorios.";
+          } else if (
+            errorText.includes("conversion failed") ||
+            errorText.includes("data type")
+          ) {
+            errorMessage =
+              "El tipo de dato proporcionado no es compatible con el campo. Verifique el formato de los datos.";
+          } else if (
+            errorText.includes("string or binary data would be truncated")
+          ) {
+            errorMessage =
+              "Los datos proporcionados exceden la longitud máxima permitida para el campo.";
+          } else if (
+            errorText.includes("table not found") ||
+            errorText.includes("object name")
+          ) {
+            errorMessage =
+              "La tabla especificada no existe o no está disponible.";
+          } else if (
+            errorText.includes("permission") ||
+            errorText.includes("access")
+          ) {
+            errorMessage =
+              "No tiene permisos para insertar registros en esta tabla.";
+          }
+        }
+
+        setError(errorMessage);
       }
     } finally {
       setAddLoading(false);
@@ -422,6 +470,7 @@ function App() {
       );
       setTableData(response.data);
 
+      // Cerrar el modal automáticamente al guardar exitosamente
       setIsEditModalOpen(false);
       setEditingRecord(null);
     } catch (error: any) {
@@ -433,7 +482,65 @@ function App() {
         setValidationErrors(error.response.data.details);
         setIsValidationErrorModalOpen(true);
       } else {
-        setError(error.response?.data?.error || error.message);
+        // Mejorar mensajes de error para ser más expresivos
+        let errorMessage = error.response?.data?.error || error.message;
+
+        // Detectar errores específicos de SQL Server
+        if (error.response?.data?.error) {
+          const errorText = error.response.data.error.toLowerCase();
+
+          if (
+            errorText.includes("primary key") ||
+            errorText.includes("duplicate key") ||
+            errorText.includes("unique constraint")
+          ) {
+            errorMessage =
+              "Ya existe un registro con la misma clave primaria. Verifique que los valores de clave primaria sean únicos.";
+          } else if (
+            errorText.includes("foreign key") ||
+            errorText.includes("fk_")
+          ) {
+            errorMessage =
+              "Los datos hacen referencia a un registro que no existe en otra tabla. Verifique las referencias.";
+          } else if (
+            errorText.includes("check constraint") ||
+            errorText.includes("check_")
+          ) {
+            errorMessage =
+              "Los datos no cumplen con las restricciones de validación configuradas en la tabla.";
+          } else if (
+            errorText.includes("cannot insert the value null") ||
+            errorText.includes("null value")
+          ) {
+            errorMessage =
+              "No se puede insertar un valor nulo en un campo requerido. Complete todos los campos obligatorios.";
+          } else if (
+            errorText.includes("conversion failed") ||
+            errorText.includes("data type")
+          ) {
+            errorMessage =
+              "El tipo de dato proporcionado no es compatible con el campo. Verifique el formato de los datos.";
+          } else if (
+            errorText.includes("string or binary data would be truncated")
+          ) {
+            errorMessage =
+              "Los datos proporcionados exceden la longitud máxima permitida para el campo.";
+          } else if (
+            errorText.includes("table not found") ||
+            errorText.includes("object name")
+          ) {
+            errorMessage =
+              "La tabla especificada no existe o no está disponible.";
+          } else if (
+            errorText.includes("permission") ||
+            errorText.includes("access")
+          ) {
+            errorMessage =
+              "No tiene permisos para modificar registros en esta tabla.";
+          }
+        }
+
+        setError(errorMessage);
       }
     } finally {
       setEditLoading(false);
@@ -880,6 +987,48 @@ function App() {
     loadTableData();
   }, [selectedTable, isAuthenticated, recordsPerPage, tables]);
 
+  // Función para descargar template de Excel
+  const handleDownloadTemplate = async () => {
+    if (!tableData?.database || !tableData?.table) {
+      setError("No se ha seleccionado una tabla");
+      return;
+    }
+
+    setDownloadingTemplate(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `http://localhost:3001/api/databases/${tableData.database}/tables/${tableData.table}/download-template`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Error al descargar el template");
+      }
+
+      // Crear un enlace temporal para descargar el archivo
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `template_${tableData.table}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      setError(error.message || "Error al descargar el template");
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
+
   // Render
   if (showLogin) {
     return (
@@ -895,12 +1044,14 @@ function App() {
     <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
       <div className="bg-primary/10 border-b border-primary/20">
-        <div className="max-w-7xl mx-auto px-8 py-6">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <div className="text-sm text-muted-foreground">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <div className="text-xs sm:text-sm text-muted-foreground">
                 Bienvenido,{" "}
-                <span className="font-semibold">{currentUser?.username}</span>
+                <span className="font-semibold break-all">
+                  {currentUser?.username}
+                </span>
                 {currentUser?.isAdmin && (
                   <span className="ml-2 px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
                     Admin
@@ -908,47 +1059,53 @@ function App() {
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
               {currentUser?.isAdmin && (
                 <>
                   <Button
                     onClick={() => setCurrentView("users")}
                     variant={currentView === "users" ? "default" : "outline"}
-                    className="text-sm"
+                    className="text-xs sm:text-sm"
                   >
-                    Gestión de Usuarios
+                    <span className="hidden sm:inline">
+                      Gestión de Usuarios
+                    </span>
+                    <span className="sm:hidden">Usuarios</span>
                   </Button>
                   <Button
                     onClick={() => setCurrentView("logs")}
                     variant={currentView === "logs" ? "default" : "outline"}
-                    className="text-sm"
+                    className="text-xs sm:text-sm"
                   >
-                    Logs del Sistema
+                    <span className="hidden sm:inline">Logs del Sistema</span>
+                    <span className="sm:hidden">Logs</span>
                   </Button>
                   <Button
                     onClick={() => setCurrentView("activated-tables")}
                     variant={
                       currentView === "activated-tables" ? "default" : "outline"
                     }
-                    className="text-sm"
+                    className="text-xs sm:text-sm"
                   >
-                    Tablas Activadas
+                    <span className="hidden sm:inline">Tablas Activadas</span>
+                    <span className="sm:hidden">Tablas</span>
                   </Button>
                 </>
               )}
               <Button
                 onClick={handleLogout}
                 variant="outline"
-                className="text-sm"
+                className="text-xs sm:text-sm"
               >
-                Cerrar Sesión
+                <span className="hidden sm:inline">Cerrar Sesión</span>
+                <span className="sm:hidden">Salir</span>
               </Button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto p-8">
+      <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
         {/* Mensaje de éxito de importación */}
         {importSuccessMessage && (
           <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 animate-in slide-in-from-top-2 duration-300">
@@ -1009,8 +1166,7 @@ function App() {
                 "🔍 Debug: Token en App.tsx antes de pasar a UserManagement:",
                 token
               );
-              console.log("🔍 Debug: Token length:", token?.length);
-              console.log("🔍 Debug: Current user:", currentUser);
+
               return (
                 <UserManagement
                   token={token!}
@@ -1050,9 +1206,9 @@ function App() {
           <>
             {/* Vista de tarjetas de tablas */}
             {tables.length > 0 && showTableCards && (
-              <div className="bg-card border border-border/50 rounded-xl p-6 mb-8 shadow-lg backdrop-blur-sm">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold text-foreground">
+              <div className="bg-card border border-border/50 rounded-xl p-4 sm:p-6 mb-6 sm:mb-8 shadow-lg backdrop-blur-sm">
+                <div className="flex items-center justify-between mb-4 sm:mb-6">
+                  <h2 className="text-lg sm:text-xl font-bold text-foreground">
                     Selecciona una tabla para gestionar
                   </h2>
                 </div>
@@ -1079,7 +1235,7 @@ function App() {
 
             {/* Data Section */}
             {selectedTable && !showTableCards && (
-              <div className="bg-card border border-border/50 rounded-xl p-6 shadow-lg backdrop-blur-sm">
+              <div className="bg-card border border-border/50 rounded-xl p-4 sm:p-6 shadow-lg backdrop-blur-sm">
                 {loading && (
                   <div className="flex items-center justify-center py-12">
                     <div className="flex items-center gap-3">
@@ -1134,9 +1290,9 @@ function App() {
                 {tableData && (
                   <div>
                     <div className="mb-6 p-4 bg-gradient-to-r from-primary/5 to-accent/5 rounded-lg border border-primary/10">
-                      <div className="flex justify-between items-center">
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                         <div>
-                          <h2 className="text-xl font-bold text-foreground mb-1">
+                          <h2 className="text-lg sm:text-xl font-bold text-foreground mb-1">
                             Datos de {tableData.database}.{tableData.table}
                           </h2>
                           <p className="text-sm text-muted-foreground">
@@ -1145,10 +1301,10 @@ function App() {
                               : "No hay registros en esta tabla"}
                           </p>
                         </div>
-                        <div className="flex gap-0">
+                        <div className="flex flex-wrap gap-2">
                           <Button
                             onClick={() => setIsAddModalOpen(true)}
-                            className="bg-[#eea92d] hover:bg-[#d99a28] text-black border-r border-white/20 rounded-r-none"
+                            className="bg-[#eea92d] hover:bg-[#d99a28] text-black text-xs sm:text-sm"
                           >
                             <svg
                               className="w-4 h-4 mr-2"
@@ -1163,11 +1319,14 @@ function App() {
                                 d="M12 6v6m0 0v6m0-6h6m-6 0H6"
                               />
                             </svg>
-                            Agregar Registro
+                            <span className="hidden sm:inline">
+                              Agregar Registro
+                            </span>
+                            <span className="sm:hidden">Agregar</span>
                           </Button>
                           <Button
                             onClick={() => setIsExcelImportModalOpen(true)}
-                            className="bg-[#0d206c] hover:bg-[#0a1a5a] text-white border-r border-white/20 rounded-none"
+                            className="bg-[#0d206c] hover:bg-[#0a1a5a] text-white text-xs sm:text-sm"
                           >
                             <svg
                               className="w-4 h-4 mr-2"
@@ -1182,11 +1341,14 @@ function App() {
                                 d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"
                               />
                             </svg>
-                            Importar Excel
+                            <span className="hidden sm:inline">
+                              Importar Excel
+                            </span>
+                            <span className="sm:hidden">Importar</span>
                           </Button>
                           <Button
                             onClick={() => setIsExcelExportModalOpen(true)}
-                            className="bg-[#0d206c] hover:bg-[#0a1a5a] text-white rounded-l-none"
+                            className="bg-[#0d206c] hover:bg-[#0a1a5a] text-white text-xs sm:text-sm"
                           >
                             <svg
                               className="w-4 h-4 mr-2"
@@ -1201,7 +1363,39 @@ function App() {
                                 d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
                               />
                             </svg>
-                            Exportar Excel
+                            <span className="hidden sm:inline">
+                              Exportar Excel
+                            </span>
+                            <span className="sm:hidden">Exportar</span>
+                          </Button>
+                          <Button
+                            onClick={handleDownloadTemplate}
+                            className="bg-[#0d206c] hover:bg-[#0a1a5a] text-white text-xs sm:text-sm"
+                            disabled={downloadingTemplate}
+                          >
+                            <svg
+                              className="w-4 h-4 mr-2"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                              />
+                            </svg>
+                            <span className="hidden sm:inline">
+                              {downloadingTemplate
+                                ? "Descargando..."
+                                : "Descargar Template"}
+                            </span>
+                            <span className="sm:hidden">
+                              {downloadingTemplate
+                                ? "Descargando..."
+                                : "Template"}
+                            </span>
                           </Button>
                         </div>
                       </div>
@@ -1220,7 +1414,7 @@ function App() {
                     )}
 
                     {tableData.data.length > 0 ? (
-                      <div className="border border-border/50 rounded-lg overflow-hidden shadow-sm">
+                      <div className="border border-border/50 rounded-lg overflow-hidden shadow-sm overflow-x-auto">
                         {/* Barra de herramientas para eliminación múltiple */}
                         {selectedRecords.length > 0 && (
                           <div className="bg-accent/10 border-b border-border/50 p-3 flex items-center justify-between">
@@ -1264,132 +1458,136 @@ function App() {
                           </div>
                         )}
 
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="bg-muted/30 hover:bg-muted/30">
-                              <TableHead className="font-semibold text-foreground w-12">
-                                <input
-                                  type="checkbox"
-                                  checked={
-                                    tableData.data.length > 0 &&
-                                    selectedRecords.length ===
-                                      tableData.data.length
-                                  }
-                                  onChange={(e) =>
-                                    handleSelectAll(e.target.checked)
-                                  }
-                                  className="w-4 h-4 text-primary bg-background border-border/50 rounded focus:ring-primary/50"
-                                />
-                              </TableHead>
-                              {Object.keys(tableData.data[0]).map((col) => (
-                                <TableHead
-                                  key={col}
-                                  className="font-semibold text-foreground text-left"
-                                >
-                                  {col}
+                        <div className="min-w-full">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                <TableHead className="font-semibold text-foreground w-12 whitespace-nowrap">
+                                  <input
+                                    type="checkbox"
+                                    checked={
+                                      tableData.data.length > 0 &&
+                                      selectedRecords.length ===
+                                        tableData.data.length
+                                    }
+                                    onChange={(e) =>
+                                      handleSelectAll(e.target.checked)
+                                    }
+                                    className="w-4 h-4 text-primary bg-background border-border/50 rounded focus:ring-primary/50"
+                                  />
                                 </TableHead>
-                              ))}
-                              <TableHead className="font-semibold text-foreground w-32">
-                                Acciones
-                              </TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {tableData.data.map((row, i) => {
-                              const isSelected = selectedRecords.some(
-                                (record) =>
-                                  tableStructure?.primaryKeys.every(
-                                    (key) => record[key] === row[key]
-                                  )
-                              );
+                                {Object.keys(tableData.data[0]).map((col) => (
+                                  <TableHead
+                                    key={col}
+                                    className="font-semibold text-foreground text-left whitespace-nowrap"
+                                  >
+                                    {col}
+                                  </TableHead>
+                                ))}
+                                <TableHead className="font-semibold text-foreground w-32 whitespace-nowrap">
+                                  Acciones
+                                </TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {tableData.data.map((row, i) => {
+                                const isSelected = selectedRecords.some(
+                                  (record) =>
+                                    tableStructure?.primaryKeys.every(
+                                      (key) => record[key] === row[key]
+                                    )
+                                );
 
-                              return (
-                                <TableRow
-                                  key={i}
-                                  className={`hover:bg-accent/5 transition-colors ${
-                                    isSelected ? "bg-accent/10" : ""
-                                  }`}
-                                >
-                                  <TableCell className="w-12">
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={(e) =>
-                                        handleRecordSelection(
-                                          row,
-                                          e.target.checked
-                                        )
-                                      }
-                                      className="w-4 h-4 text-primary bg-background border-border/50 rounded focus:ring-primary/50"
-                                    />
-                                  </TableCell>
-                                  {Object.keys(row).map((col) => (
-                                    <TableCell
-                                      key={col}
-                                      className="text-sm text-left"
-                                    >
-                                      {row[col] === null ? (
-                                        <span className="text-muted-foreground italic">
-                                          null
-                                        </span>
-                                      ) : (
-                                        formatCellValue(
-                                          row[col],
-                                          col,
-                                          tableStructure
-                                        )
-                                      )}
+                                return (
+                                  <TableRow
+                                    key={i}
+                                    className={`hover:bg-accent/5 transition-colors ${
+                                      isSelected ? "bg-accent/10" : ""
+                                    }`}
+                                  >
+                                    <TableCell className="w-12">
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={(e) =>
+                                          handleRecordSelection(
+                                            row,
+                                            e.target.checked
+                                          )
+                                        }
+                                        className="w-4 h-4 text-primary bg-background border-border/50 rounded focus:ring-primary/50"
+                                      />
                                     </TableCell>
-                                  ))}
-                                  <TableCell className="w-32">
-                                    <div className="flex gap-2">
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => handleEditRecord(row)}
-                                        className="h-8 px-2"
+                                    {Object.keys(row).map((col) => (
+                                      <TableCell
+                                        key={col}
+                                        className="text-sm text-left"
                                       >
-                                        <svg
-                                          className="w-4 h-4 text-white"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          viewBox="0 0 24 24"
+                                        {row[col] === null ? (
+                                          <span className="text-muted-foreground italic">
+                                            null
+                                          </span>
+                                        ) : (
+                                          formatCellValue(
+                                            row[col],
+                                            col,
+                                            tableStructure
+                                          )
+                                        )}
+                                      </TableCell>
+                                    ))}
+                                    <TableCell className="w-32">
+                                      <div className="flex gap-2">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => handleEditRecord(row)}
+                                          className="h-8 px-2"
                                         >
-                                          <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                          />
-                                        </svg>
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => handleDeleteRecord(row)}
-                                        className="h-8 px-2 text-white hover:text-white"
-                                      >
-                                        <svg
-                                          className="w-4 h-4 text-white"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          viewBox="0 0 24 24"
+                                          <svg
+                                            className="w-4 h-4 text-white"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                          >
+                                            <path
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                              strokeWidth={2}
+                                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                            />
+                                          </svg>
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            handleDeleteRecord(row)
+                                          }
+                                          className="h-8 px-2 text-white hover:text-white"
                                         >
-                                          <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                          />
-                                        </svg>
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
+                                          <svg
+                                            className="w-4 h-4 text-white"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                          >
+                                            <path
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                              strokeWidth={2}
+                                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                            />
+                                          </svg>
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
 
                         {/* Componente de paginación */}
                         {totalRecords > 0 && (

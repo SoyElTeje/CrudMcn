@@ -48,3 +48,12 @@ CREATE INDEX IX_TABLE_CONDITIONS_ACTIVE ON TABLE_CONDITIONS(IsActive);
 -- VALUES ('APPDATA', 'USERS', 'Tabla de usuarios del sistema', 1);
 
 PRINT '✅ Tablas del sistema de activación creadas exitosamente';
+
+
+
+
+
+
+
+
+

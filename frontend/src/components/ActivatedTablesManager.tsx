@@ -872,17 +872,7 @@ const ActivatedTablesManager: React.FC = () => {
             </div>
 
             {/* Estructura y condiciones */}
-            {(() => {
-              console.log(`🔍 Render debug:`, {
-                selectedDatabase,
-                selectedTable,
-                tableStructureLength: tableStructure.length,
-                conditionsLength: conditions.length,
-              });
-              return (
-                selectedDatabase && selectedTable && tableStructure.length > 0
-              );
-            })() && (
+            {selectedDatabase && selectedTable && tableStructure.length > 0 && (
               <div>
                 <h4 className="text-md font-medium text-gray-900 mb-3">
                   Configurar Condiciones por Columna
@@ -1022,14 +1012,7 @@ const ActivatedTablesManager: React.FC = () => {
             </div>
 
             {/* Estructura y condiciones */}
-            {(() => {
-              console.log(`🔍 Edit view debug:`, {
-                tableStructureLength: tableStructure.length,
-                conditionsLength: conditions.length,
-                currentView,
-              });
-              return tableStructure.length > 0;
-            })() && (
+            {tableStructure.length > 0 && (
               <div>
                 <h4 className="text-md font-medium text-gray-900 mb-3">
                   Configurar Condiciones por Columna

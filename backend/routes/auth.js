@@ -107,6 +107,12 @@ router.post("/users", authenticateToken, requireAdmin, async (req, res) => {
   } catch (error) {
     console.error("Error creando usuario:", error);
 
+    // Manejar errores de SQL Server para usuarios duplicados
+    if (error.code === "EREQUEST" && error.number === 2627) {
+      return res.status(400).json({ error: "El nombre de usuario ya existe" });
+    }
+
+    // Manejar errores de MySQL para compatibilidad (si se usa en el futuro)
     if (error.code === "ER_DUP_ENTRY") {
       return res.status(400).json({ error: "El nombre de usuario ya existe" });
     }

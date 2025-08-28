@@ -148,18 +148,11 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
     }
 
     // Debug: Verificar el token
-    console.log("🔍 Debug: Token recibido en UserManagement:", token);
-    console.log("🔍 Debug: Token length:", token?.length);
-    console.log("🔍 Debug: Token substring:", token?.substring(0, 50) + "...");
 
     try {
       setCreatingUser(true);
 
       // Debug: Verificar headers antes de la petición
-      console.log("🔍 Debug: Headers de la petición:", {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      });
 
       // Usar axios directamente con el token para evitar problemas con el interceptor
       const response = await axios.post(
@@ -181,9 +174,6 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
         setError("Error creando usuario");
       }
     } catch (error: any) {
-      console.log("🔍 Debug: Error completo:", error);
-      console.log("🔍 Debug: Error response:", error.response);
-      console.log("🔍 Debug: Error data:", error.response?.data);
       setError(error.response?.data?.error || "Error creando usuario");
     } finally {
       setCreatingUser(false);
@@ -443,16 +433,19 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">
+          <h2 className="text-xl sm:text-2xl font-bold text-foreground">
             Gestión de Usuarios
           </h2>
-          <p className="text-muted-foreground">
+          <p className="text-sm sm:text-base text-muted-foreground">
             Administra usuarios y sus permisos
           </p>
         </div>
-        <Button onClick={() => setShowCreateForm(true)}>
+        <Button
+          onClick={() => setShowCreateForm(true)}
+          className="bg-yellow-500 hover:bg-yellow-600 text-black w-full sm:w-auto"
+        >
           <svg
             className="w-4 h-4 mr-2"
             fill="none"
@@ -501,7 +494,7 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
       )}
 
       {/* Tabla de usuarios */}
-      <div className="bg-card border border-border/50 rounded-xl p-6 shadow-lg">
+      <div className="bg-card border border-border/50 rounded-xl p-3 sm:p-6 shadow-lg overflow-x-auto">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="flex items-center gap-3">
@@ -512,79 +505,99 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
             </div>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Usuario</TableHead>
-                <TableHead>Administrador</TableHead>
-                <TableHead>Fecha Creación</TableHead>
-                <TableHead>Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>{user.id}</TableCell>
-                  <TableCell className="font-medium">{user.username}</TableCell>
-                  <TableCell>
-                    {user.isAdmin ? (
-                      <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
-                        Admin
-                      </span>
-                    ) : (
-                      <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">
-                        Usuario
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell>{formatDate(user.createdAt)}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
-                        onClick={() => {
-                          setEditingUser(user);
-                          setShowEditForm(true);
-                        }}
-                      >
-                        Cambiar Contraseña
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
-                        onClick={() => openPermissionsModal(user)}
-                      >
-                        Permisos
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
-                        onClick={() => handleToggleAdmin(user)}
-                      >
-                        {user.isAdmin ? "Quitar Admin" : "Hacer Admin"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => handleDeleteUser(user)}
-                        className="bg-red-600 hover:bg-red-700 text-white border-red-600"
-                      >
-                        Eliminar
-                      </Button>
-                    </div>
-                  </TableCell>
+          <div className="min-w-full">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="whitespace-nowrap">ID</TableHead>
+                  <TableHead className="whitespace-nowrap">Usuario</TableHead>
+                  <TableHead className="whitespace-nowrap">
+                    Administrador
+                  </TableHead>
+                  <TableHead className="whitespace-nowrap">
+                    Fecha Creación
+                  </TableHead>
+                  <TableHead className="whitespace-nowrap">Acciones</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {users.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell className="whitespace-nowrap">
+                      {user.id}
+                    </TableCell>
+                    <TableCell className="font-medium break-all">
+                      {user.username}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {user.isAdmin ? (
+                        <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
+                          Admin
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">
+                          Usuario
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {formatDate(user.createdAt)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <Button
+                          size="sm"
+                          className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 text-xs"
+                          onClick={() => {
+                            setEditingUser(user);
+                            setShowEditForm(true);
+                          }}
+                        >
+                          <span className="hidden sm:inline">
+                            Cambiar Contraseña
+                          </span>
+                          <span className="sm:hidden">Contraseña</span>
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 text-xs"
+                          onClick={() => openPermissionsModal(user)}
+                        >
+                          Permisos
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 text-xs"
+                          onClick={() => handleToggleAdmin(user)}
+                        >
+                          <span className="hidden sm:inline">
+                            {user.isAdmin ? "Quitar Admin" : "Hacer Admin"}
+                          </span>
+                          <span className="sm:hidden">
+                            {user.isAdmin ? "Quitar" : "Admin"}
+                          </span>
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleDeleteUser(user)}
+                          className="bg-red-600 hover:bg-red-700 text-white border-red-600 text-xs"
+                        >
+                          Eliminar
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </div>
 
       {/* Modal para crear usuario */}
       {showCreateForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white border border-gray-300 rounded-xl p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-gray-300 rounded-xl p-4 sm:p-6 w-full max-w-md mx-auto">
             <h3 className="text-lg font-semibold mb-4 text-black">
               Crear Nuevo Usuario
             </h3>
@@ -632,17 +645,21 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                 </label>
               </div>
             </div>
-            <div className="flex gap-2 mt-6">
+            <div className="flex flex-col sm:flex-row gap-2 mt-6">
               <Button
                 onClick={() => setShowCreateForm(false)}
-                className="bg-[#447cd7] hover:bg-[#3a6bc4] text-white"
+                className="bg-[#447cd7] hover:bg-[#3a6bc4] text-white w-full sm:w-auto"
               >
                 Cancelar
               </Button>
               <Button
                 onClick={handleCreateUser}
                 disabled={creatingUser}
-                className="bg-[#0d206c] hover:bg-[#0a1a5a] text-white"
+                className={`w-full sm:w-auto ${
+                  newUser.isAdmin
+                    ? "bg-yellow-500 hover:bg-yellow-600 text-black"
+                    : "bg-[#0d206c] hover:bg-[#0a1a5a] text-white"
+                }`}
               >
                 {creatingUser ? "Creando..." : "Crear"}
               </Button>
@@ -653,8 +670,8 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
 
       {/* Modal para cambiar contraseña */}
       {showEditForm && editingUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white border border-gray-300 rounded-xl p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-gray-300 rounded-xl p-4 sm:p-6 w-full max-w-md mx-auto">
             <h3 className="text-lg font-semibold mb-4 text-black">
               Cambiar Contraseña - {editingUser.username}
             </h3>
@@ -672,17 +689,17 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                 />
               </div>
             </div>
-            <div className="flex gap-2 mt-6">
+            <div className="flex flex-col sm:flex-row gap-2 mt-6">
               <Button
                 onClick={() => setShowEditForm(false)}
-                className="bg-[#447cd7] hover:bg-[#3a6bc4] text-white"
+                className="bg-[#447cd7] hover:bg-[#3a6bc4] text-white w-full sm:w-auto"
               >
                 Cancelar
               </Button>
               <Button
                 onClick={handleUpdatePassword}
                 disabled={updatingUser}
-                className="bg-[#0d206c] hover:bg-[#0a1a5a] text-white"
+                className="bg-[#0d206c] hover:bg-[#0a1a5a] text-white w-full sm:w-auto"
               >
                 {updatingUser ? "Actualizando..." : "Actualizar"}
               </Button>
@@ -693,17 +710,17 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
 
       {/* Modal de permisos */}
       {showPermissionsModal && selectedUserForPermissions && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white border border-gray-200 rounded-2xl p-8 w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-8 w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl mx-auto">
             {/* Header */}
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
               <div>
-                <h3 className="text-2xl font-bold text-gray-900">
+                <h3 className="text-xl sm:text-2xl font-bold text-gray-900">
                   Gestión de Permisos
                 </h3>
-                <p className="text-gray-600 mt-1">
+                <p className="text-sm sm:text-base text-gray-600 mt-1">
                   Usuario:{" "}
-                  <span className="font-semibold text-blue-600">
+                  <span className="font-semibold text-blue-600 break-all">
                     {selectedUserForPermissions.username}
                   </span>
                 </p>
@@ -712,7 +729,7 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                 onClick={() => setShowPermissionsModal(false)}
                 variant="ghost"
                 size="sm"
-                className="h-10 w-10 p-0 text-gray-600 hover:bg-red-100 hover:text-red-600 transition-colors"
+                className="h-10 w-10 p-0 text-gray-600 hover:bg-red-100 hover:text-red-600 transition-colors self-end sm:self-auto"
                 title="Cerrar modal"
               >
                 <svg
@@ -731,7 +748,7 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
               </Button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-8">
               {/* Panel de Asignación de Permisos */}
               <div className="space-y-6">
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
@@ -761,12 +778,19 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                         value={selectedDatabase}
                         onValueChange={setSelectedDatabase}
                       >
-                        <SelectTrigger className="bg-white border-gray-300 hover:border-blue-400 focus:border-blue-500 transition-colors">
-                          <SelectValue placeholder="Elegir base de datos..." />
+                        <SelectTrigger className="bg-white border-gray-300 hover:border-blue-400 focus:border-blue-500 transition-colors text-gray-900">
+                          <SelectValue
+                            placeholder="Elegir base de datos..."
+                            className="text-gray-900"
+                          />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="bg-white text-gray-900 border border-gray-200">
                           {databases.map((db) => (
-                            <SelectItem key={db} value={db}>
+                            <SelectItem
+                              key={db}
+                              value={db}
+                              className="text-gray-900 hover:bg-gray-100"
+                            >
                               <div className="flex items-center">
                                 <svg
                                   className="w-4 h-4 mr-2 text-blue-500"
@@ -869,7 +893,7 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                   </h4>
 
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Base de Datos
@@ -882,12 +906,19 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                             loadTables(value);
                           }}
                         >
-                          <SelectTrigger className="bg-white border-gray-300 hover:border-green-400 focus:border-green-500 transition-colors">
-                            <SelectValue placeholder="Elegir base de datos..." />
+                          <SelectTrigger className="bg-white border-gray-300 hover:border-green-400 focus:border-green-500 transition-colors text-gray-900">
+                            <SelectValue
+                              placeholder="Elegir base de datos..."
+                              className="text-gray-900"
+                            />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="bg-white text-gray-900 border border-gray-200">
                             {databases.map((db) => (
-                              <SelectItem key={db} value={db}>
+                              <SelectItem
+                                key={db}
+                                value={db}
+                                className="text-gray-900 hover:bg-gray-100"
+                              >
                                 <div className="flex items-center">
                                   <svg
                                     className="w-4 h-4 mr-2 text-green-500"
@@ -919,12 +950,19 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                           onValueChange={setSelectedTable}
                           disabled={!selectedDatabase}
                         >
-                          <SelectTrigger className="bg-white border-gray-300 hover:border-green-400 focus:border-green-500 transition-colors disabled:opacity-50">
-                            <SelectValue placeholder="Elegir tabla..." />
+                          <SelectTrigger className="bg-white border-gray-300 hover:border-green-400 focus:border-green-500 transition-colors disabled:opacity-50 text-gray-900">
+                            <SelectValue
+                              placeholder="Elegir tabla..."
+                              className="text-gray-900"
+                            />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="bg-white text-gray-900 border border-gray-200">
                             {tables.map((table) => (
-                              <SelectItem key={table.name} value={table.name}>
+                              <SelectItem
+                                key={table.name}
+                                value={table.name}
+                                className="text-gray-900 hover:bg-gray-100"
+                              >
                                 <div className="flex items-center">
                                   <svg
                                     className="w-4 h-4 mr-2 text-green-500"
@@ -1066,52 +1104,56 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                             (perm, index) => (
                               <div
                                 key={index}
-                                className="flex items-center justify-between bg-white rounded-lg p-3 border border-gray-200"
+                                className="bg-white rounded-lg p-3 border border-gray-200"
                               >
-                                <span className="font-medium text-gray-900">
-                                  {perm.databaseName}
-                                </span>
-                                <div className="flex items-center">
-                                  <svg
-                                    className="w-4 h-4 text-green-500 mr-1"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                                    />
-                                  </svg>
-                                  <span className="text-sm text-green-600 font-medium">
-                                    Acceso Completo
-                                  </span>
+                                <div className="flex flex-col gap-2">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <span className="font-medium text-gray-900 break-all flex-1 min-w-0">
+                                      {perm.databaseName}
+                                    </span>
+                                    <Button
+                                      size="sm"
+                                      onClick={() =>
+                                        handleRemoveDatabasePermissions(
+                                          perm.databaseName
+                                        )
+                                      }
+                                      className="bg-red-600 hover:bg-red-700 text-white border-red-600 flex-shrink-0"
+                                    >
+                                      <svg
+                                        className="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M6 18L18 6M6 6l12 12"
+                                        />
+                                      </svg>
+                                    </Button>
+                                  </div>
+                                  <div className="flex items-center">
+                                    <svg
+                                      className="w-4 h-4 text-green-500 mr-1"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                      />
+                                    </svg>
+                                    <span className="text-sm text-green-600 font-medium">
+                                      Acceso Completo
+                                    </span>
+                                  </div>
                                 </div>
-                                <Button
-                                  size="sm"
-                                  onClick={() =>
-                                    handleRemoveDatabasePermissions(
-                                      perm.databaseName
-                                    )
-                                  }
-                                  className="bg-red-600 hover:bg-red-700 text-white border-red-600"
-                                >
-                                  <svg
-                                    className="w-4 h-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M6 18L18 6M6 6l12 12"
-                                    />
-                                  </svg>
-                                </Button>
                               </div>
                             )
                           )}
@@ -1143,53 +1185,57 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                             (perm, index) => (
                               <div
                                 key={index}
-                                className="flex items-center justify-between bg-white rounded-lg p-3 border border-gray-200"
+                                className="bg-white rounded-lg p-3 border border-gray-200"
                               >
-                                <span className="font-medium text-gray-900">
-                                  {perm.databaseName}.{perm.tableName}
-                                </span>
-                                <div className="flex items-center">
-                                  <svg
-                                    className="w-4 h-4 text-green-500 mr-1"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                                    />
-                                  </svg>
-                                  <span className="text-sm text-green-600 font-medium">
-                                    Acceso Completo
-                                  </span>
+                                <div className="flex flex-col gap-2">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <span className="font-medium text-gray-900 break-all flex-1 min-w-0">
+                                      {perm.databaseName}.{perm.tableName}
+                                    </span>
+                                    <Button
+                                      size="sm"
+                                      onClick={() =>
+                                        handleRemoveTablePermissions(
+                                          perm.databaseName,
+                                          perm.tableName
+                                        )
+                                      }
+                                      className="bg-red-600 hover:bg-red-700 text-white border-red-600 flex-shrink-0"
+                                    >
+                                      <svg
+                                        className="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M6 18L18 6M6 6l12 12"
+                                        />
+                                      </svg>
+                                    </Button>
+                                  </div>
+                                  <div className="flex items-center">
+                                    <svg
+                                      className="w-4 h-4 text-green-500 mr-1"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                      />
+                                    </svg>
+                                    <span className="text-sm text-green-600 font-medium">
+                                      Acceso Completo
+                                    </span>
+                                  </div>
                                 </div>
-                                <Button
-                                  size="sm"
-                                  onClick={() =>
-                                    handleRemoveTablePermissions(
-                                      perm.databaseName,
-                                      perm.tableName
-                                    )
-                                  }
-                                  className="bg-red-600 hover:bg-red-700 text-white border-red-600"
-                                >
-                                  <svg
-                                    className="w-4 h-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M6 18L18 6M6 6l12 12"
-                                    />
-                                  </svg>
-                                </Button>
                               </div>
                             )
                           )}

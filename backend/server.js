@@ -355,11 +355,79 @@ app.get(
 
       const result = await request.query(query);
 
+      // Convertir fechas de ISO a DD/MM/AAAA para el frontend
+      const { formatDateDDMMYYYY } = require("./utils/dateUtils");
+
+      const recordsWithFormattedDates = result.recordset.map((record) => {
+        const formattedRecord = { ...record };
+
+        // Usar el campo FechaIngreso_String si existe, y convertir fechas
+        if (formattedRecord.FechaIngreso_String) {
+          // Convertir YYYY-MM-DD a DD/MM/AAAA
+          const match = formattedRecord.FechaIngreso_String.match(
+            /^(\d{4})-(\d{2})-(\d{2})$/
+          );
+          if (match) {
+            const year = match[1];
+            const month = match[2];
+            const day = match[3];
+            const formattedDate = `${day}/${month}/${year}`;
+            formattedRecord.FechaIngreso = formattedDate;
+          }
+
+          // Eliminar el campo temporal
+          delete formattedRecord.FechaIngreso_String;
+        } else {
+          // Procesar otros campos de fecha si existen
+          Object.keys(formattedRecord).forEach((key) => {
+            const value = formattedRecord[key];
+
+            if (value instanceof Date) {
+              // Es un objeto Date, convertirlo a DD/MM/AAAA
+              formattedRecord[key] = formatDateDDMMYYYY(value);
+            } else if (
+              typeof value === "string" &&
+              value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
+            ) {
+              // Es un string ISO datetime, convertirlo a DD/MM/AAAA HH:MM
+              const date = new Date(value);
+              if (!isNaN(date.getTime())) {
+                const day = date.getDate().toString().padStart(2, "0");
+                const month = (date.getMonth() + 1).toString().padStart(2, "0");
+                const year = date.getFullYear();
+                const hours = date.getHours().toString().padStart(2, "0");
+                const minutes = date.getMinutes().toString().padStart(2, "0");
+                const formattedDateTime = `${day}/${month}/${year} ${hours}:${minutes}`;
+                formattedRecord[key] = formattedDateTime;
+              }
+            } else if (
+              typeof value === "string" &&
+              value.match(/^\d{4}-\d{2}-\d{2}$/)
+            ) {
+              // Es un string ISO date (YYYY-MM-DD), convertirlo a DD/MM/AAAA
+              // Extraer directamente los componentes de la fecha para evitar problemas de zona horaria
+              const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+              if (match) {
+                const year = match[1];
+                const month = match[2];
+                const day = match[3];
+                const formattedDate = `${day}/${month}/${year}`;
+                formattedRecord[key] = formattedDate;
+              }
+            }
+          });
+        }
+
+        return formattedRecord;
+      });
+
+
+
       res.json({
         database: dbName,
         table: tableName,
-        count: result.recordset.length,
-        data: result.recordset,
+        count: recordsWithFormattedDates.length,
+        data: recordsWithFormattedDates,
       });
     } catch (error) {
       console.error("Error fetching table data:", error);
@@ -523,6 +591,12 @@ app.post(
               `DEBUG: Procesando fecha para columna ${col.COLUMN_NAME}: "${value}"`
             );
 
+            // Importar las utilidades de fecha
+            const {
+              isMMDDYYYYFormat,
+              convertToISODate,
+            } = require("./utils/dateUtils");
+
             // Verificar si es formato MM/DD/AAAA y rechazarlo
             if (isMMDDYYYYFormat(value)) {
               console.log(
@@ -536,13 +610,10 @@ app.post(
             }
 
             const isoDate = convertToISODate(value);
-            console.log(`DEBUG: Resultado de convertToISODate: "${isoDate}"`);
             if (isoDate) {
               value = isoDate;
-              console.log(`DEBUG: Fecha convertida a: "${value}"`);
             } else {
               // Si la conversión falla, lanzar error
-              console.log(`DEBUG: Error de conversión para fecha: "${value}"`);
               return res.status(400).json({
                 error: "Formato de fecha inválido",
                 details: `El campo '${col.COLUMN_NAME}' debe estar en formato DD/MM/AAAA`,
@@ -713,6 +784,17 @@ app.put(
         });
       }
 
+      // Get table columns with data types for date conversion
+      const columnsResponse = await pool.request().input("tableName", tableName)
+        .query(`
+          SELECT COLUMN_NAME, DATA_TYPE
+          FROM INFORMATION_SCHEMA.COLUMNS 
+          WHERE TABLE_NAME = @tableName
+          ORDER BY ORDINAL_POSITION
+        `);
+
+      const columns = columnsResponse.recordset;
+
       // Build SET clause for UPDATE (exclude primary keys)
       const setFields = Object.keys(record).filter(
         (key) => !primaryKeys.includes(key)
@@ -726,10 +808,14 @@ app.put(
 
       const query = `UPDATE [${tableName}] SET ${setClause} WHERE ${whereClause}`;
 
+      console.log(
+        `🔍 Debug update - Actualizando ${setFields.length} campos en ${tableName}`
+      );
+
       const request = pool.request();
 
       // Add parameters for SET clause
-      setFields.forEach((key) => {
+      for (const key of setFields) {
         let value = record[key];
 
         // Buscar el tipo de dato de la columna
@@ -767,7 +853,7 @@ app.put(
         }
 
         request.input(key, value);
-      });
+      }
 
       // Add parameters for WHERE clause (primary keys)
       primaryKeys.forEach((key) => {
@@ -1081,6 +1167,7 @@ app.post(
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
+      const { ignoreHeaders } = req.body; // Nueva opción para ignorar headers
 
       if (!req.file) {
         return res.status(400).json({
@@ -1092,12 +1179,14 @@ app.post(
         `📊 Procesando importación de Excel para ${dbName}.${tableName}`
       );
       console.log(`📁 Archivo: ${req.file.originalname}`);
+      console.log(`🔧 Ignorar headers: ${ignoreHeaders === "true"}`);
 
       // Procesar la importación
       const result = await excelService.processExcelImport(
         req.file.path,
         dbName,
-        tableName
+        tableName,
+        ignoreHeaders === "true"
       );
 
       // Registrar log de importación de Excel
@@ -1107,7 +1196,11 @@ app.post(
           req.user.username,
           dbName,
           tableName,
-          { importType: "Excel", fileName: req.file.originalname },
+          {
+            importType: "Excel",
+            fileName: req.file.originalname,
+            ignoreHeaders,
+          },
           null, // recordId
           req.ip,
           req.get("User-Agent")
@@ -1123,12 +1216,87 @@ app.post(
           errorCount: result.errorCount,
           headers: result.headers,
           errors: result.errors,
+          errorReport: result.errorReport,
         },
       });
     } catch (error) {
       console.error("Error importing Excel data:", error);
       res.status(500).json({
         error: "Error al importar datos desde Excel",
+        details: error.message,
+      });
+    }
+  }
+);
+
+// Ruta para descargar reporte de errores de importación
+app.get(
+  "/api/download-error-report/:fileName",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { fileName } = req.params;
+      const filePath = `uploads/${fileName}`;
+
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({
+          error: "El archivo de reporte de errores no existe",
+        });
+      }
+
+      res.download(filePath, fileName, (err) => {
+        if (err) {
+          console.error("Error downloading error report:", err);
+        }
+        // Limpiar el archivo después de la descarga
+        setTimeout(() => {
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        }, 5000); // Esperar 5 segundos antes de eliminar
+      });
+    } catch (error) {
+      console.error("Error serving error report:", error);
+      res.status(500).json({
+        error: "Error al descargar el reporte de errores",
+        details: error.message,
+      });
+    }
+  }
+);
+
+// Ruta para descargar template de Excel con headers de la tabla
+app.get(
+  "/api/databases/:dbName/tables/:tableName/download-template",
+  authenticateToken,
+  requireReadPermission,
+  async (req, res) => {
+    try {
+      const { dbName, tableName } = req.params;
+
+      console.log(`📋 Generando template de Excel para ${dbName}.${tableName}`);
+
+      // Generar el template
+      const template = await excelService.generateExcelTemplate(
+        dbName,
+        tableName
+      );
+
+      // Enviar el archivo
+      res.download(template.filePath, template.fileName, (err) => {
+        // Limpiar el archivo temporal después de enviarlo
+        if (fs.existsSync(template.filePath)) {
+          fs.unlinkSync(template.filePath);
+        }
+
+        if (err) {
+          console.error("Error sending template file:", err);
+        }
+      });
+    } catch (error) {
+      console.error("Error generating Excel template:", error);
+      res.status(500).json({
+        error: "Error al generar template de Excel",
         details: error.message,
       });
     }
@@ -1144,6 +1312,7 @@ app.post(
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
+      const { ignoreHeaders } = req.body; // Nueva opción para ignorar headers
 
       if (!req.file) {
         return res.status(400).json({
@@ -1152,14 +1321,53 @@ app.post(
       }
 
       // Leer el archivo Excel sin insertar
-      const excelData = await excelService.readExcelFile(req.file.path);
-
-      // Validar columnas
-      const validation = await excelService.validateColumns(
-        dbName,
-        tableName,
-        excelData.headers
+      const excelData = await excelService.readExcelFile(
+        req.file.path,
+        ignoreHeaders === "true"
       );
+
+      console.log("🔍 Debug preview - ignoreHeaders:", ignoreHeaders);
+      console.log("🔍 Debug preview - excelData.headers:", excelData.headers);
+      console.log(
+        "🔍 Debug preview - excelData.rows.length:",
+        excelData.rows.length
+      );
+      console.log("🔍 Debug preview - primera fila:", excelData.rows[0]);
+
+      // Si se ignoran los headers, obtener los headers de la tabla para validación
+      let headers = excelData.headers;
+      let validation;
+
+      if (ignoreHeaders === "true") {
+        const tableStructure = await excelService.getTableHeaders(
+          dbName,
+          tableName
+        );
+        // Para la vista previa, mostrar las filas reales del Excel (incluyendo la primera como datos)
+        // pero usar los headers de la tabla para la validación
+        headers = tableStructure.insertableColumns;
+        validation = {
+          tableColumns: tableStructure.tableColumns,
+          insertableColumns: tableStructure.insertableColumns,
+          identityColumns: tableStructure.identityColumns,
+        };
+        console.log("🔍 Debug preview - usando headers de tabla:", headers);
+        console.log(
+          "🔍 Debug preview - filas del Excel (incluyendo primera como datos):",
+          excelData.rows.length
+        );
+      } else {
+        // Validar columnas normalmente
+        validation = await excelService.validateColumns(
+          dbName,
+          tableName,
+          excelData.headers
+        );
+        console.log(
+          "🔍 Debug preview - usando headers del Excel:",
+          excelData.headers
+        );
+      }
 
       // Limpiar archivo temporal
       if (fs.existsSync(req.file.path)) {
@@ -1169,7 +1377,7 @@ app.post(
       res.json({
         success: true,
         data: {
-          headers: excelData.headers,
+          headers: headers,
           totalRows: excelData.totalRows,
           previewRows: excelData.rows.slice(0, 5), // Mostrar solo las primeras 5 filas
           validation: {
@@ -1177,6 +1385,7 @@ app.post(
             insertableColumns: validation.insertableColumns,
             identityColumns: validation.identityColumns,
           },
+          ignoreHeaders: ignoreHeaders === "true", // Agregar esta información para el frontend
         },
       });
     } catch (error) {

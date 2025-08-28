@@ -136,6 +136,35 @@ export function ExcelImportModal({
         }
       );
 
+      // Si hay errores, descargar automáticamente el reporte de errores
+      if (response.data.data.errorCount > 0 && response.data.data.errorReport) {
+        try {
+          const errorReportResponse = await api.get(
+            `/api/download-error-report/${response.data.data.errorReport.fileName}`,
+            {
+              responseType: "blob",
+            }
+          );
+
+          // Crear un enlace temporal para descargar el archivo
+          const url = window.URL.createObjectURL(
+            new Blob([errorReportResponse.data])
+          );
+          const link = document.createElement("a");
+          link.href = url;
+          link.setAttribute(
+            "download",
+            response.data.data.errorReport.fileName
+          );
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          window.URL.revokeObjectURL(url);
+        } catch (downloadError) {
+          console.error("Error downloading error report:", downloadError);
+        }
+      }
+
       // Cerrar modal y pasar el resultado al componente padre
       handleClose();
       onImportComplete(response.data);
