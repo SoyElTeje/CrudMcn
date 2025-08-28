@@ -19,16 +19,8 @@ interface LogEntry {
   UserAgent: string | null;
 }
 
-interface LogStats {
-  Action: string;
-  Count: number;
-  UniqueUsers: number;
-  UniqueTables: number;
-}
-
 const LogsViewer: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [stats, setStats] = useState<LogStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState({
@@ -39,7 +31,6 @@ const LogsViewer: React.FC = () => {
     startDate: "",
     endDate: "",
   });
-  const [currentView, setCurrentView] = useState<"logs" | "stats">("logs");
 
   // Estados para paginación
   const [currentPage, setCurrentPage] = useState(1);
@@ -101,27 +92,9 @@ const LogsViewer: React.FC = () => {
     }
   };
 
-  const fetchStats = async () => {
-    try {
-      setLoading(true);
-      const data = await api.get("/api/logs/stats");
-      setStats(data);
-      setError(null);
-    } catch (err) {
-      setError("Error al cargar las estadísticas");
-      console.error("Error fetching stats:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    if (currentView === "logs") {
-      fetchLogs();
-    } else {
-      fetchStats();
-    }
-  }, [currentView, filters, currentPage, recordsPerPage]);
+    fetchLogs();
+  }, [filters, currentPage, recordsPerPage]);
 
   const getActionColor = (action: string) => {
     switch (action) {
@@ -150,21 +123,6 @@ const LogsViewer: React.FC = () => {
     if (!data) return "N/A";
     const str = JSON.stringify(data);
     return str.length > 100 ? str.substring(0, 100) + "..." : str;
-  };
-
-  const getActionIcon = (action: string) => {
-    switch (action) {
-      case "INSERT":
-        return "➕";
-      case "UPDATE":
-        return "✏️";
-      case "DELETE":
-        return "🗑️";
-      case "EXPORT":
-        return "📊";
-      default:
-        return "📝";
-    }
   };
 
   const handleFilterChange = (key: string, value: string) => {
@@ -233,303 +191,223 @@ const LogsViewer: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-white">Sistema de Logs</h2>
-        <div className="flex space-x-2">
+      </div>
+
+      {/* Filtros */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Filtros</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Acción
+            </label>
+            <select
+              value={filters.action}
+              onChange={(e) => handleFilterChange("action", e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+            >
+              <option value="">Todas</option>
+              <option value="INSERT">INSERT</option>
+              <option value="UPDATE">UPDATE</option>
+              <option value="DELETE">DELETE</option>
+              <option value="EXPORT">EXPORT</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Base de Datos
+            </label>
+            <input
+              type="text"
+              value={filters.databaseName}
+              onChange={(e) =>
+                handleFilterChange("databaseName", e.target.value)
+              }
+              placeholder="Filtrar por base de datos"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tabla
+            </label>
+            <input
+              type="text"
+              value={filters.tableName}
+              onChange={(e) => handleFilterChange("tableName", e.target.value)}
+              placeholder="Filtrar por tabla"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Usuario
+            </label>
+            <input
+              type="text"
+              value={filters.username}
+              onChange={(e) => handleFilterChange("username", e.target.value)}
+              placeholder="Filtrar por usuario"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Fecha Inicio
+            </label>
+            <input
+              type="date"
+              value={filters.startDate}
+              onChange={(e) => handleFilterChange("startDate", e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Fecha Fin
+            </label>
+            <input
+              type="date"
+              value={filters.endDate}
+              onChange={(e) => handleFilterChange("endDate", e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 flex justify-end">
           <button
-            onClick={() => setCurrentView("logs")}
-            className={`px-4 py-2 rounded-lg font-medium ${
-              currentView === "logs"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-            }`}
+            onClick={clearFilters}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
           >
-            Logs
-          </button>
-          <button
-            onClick={() => setCurrentView("stats")}
-            className={`px-4 py-2 rounded-lg font-medium ${
-              currentView === "stats"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-            }`}
-          >
-            Estadísticas
+            Limpiar Filtros
           </button>
         </div>
       </div>
 
-      {currentView === "logs" && (
-        <>
-          {/* Filtros */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Filtros</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Acción
-                </label>
-                <select
-                  value={filters.action}
-                  onChange={(e) => handleFilterChange("action", e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                >
-                  <option value="">Todas</option>
-                  <option value="INSERT">INSERT</option>
-                  <option value="UPDATE">UPDATE</option>
-                  <option value="DELETE">DELETE</option>
-                  <option value="EXPORT">EXPORT</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Base de Datos
-                </label>
-                <input
-                  type="text"
-                  value={filters.databaseName}
-                  onChange={(e) =>
-                    handleFilterChange("databaseName", e.target.value)
-                  }
-                  placeholder="Filtrar por base de datos"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tabla
-                </label>
-                <input
-                  type="text"
-                  value={filters.tableName}
-                  onChange={(e) =>
-                    handleFilterChange("tableName", e.target.value)
-                  }
-                  placeholder="Filtrar por tabla"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Usuario
-                </label>
-                <input
-                  type="text"
-                  value={filters.username}
-                  onChange={(e) =>
-                    handleFilterChange("username", e.target.value)
-                  }
-                  placeholder="Filtrar por usuario"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Fecha Inicio
-                </label>
-                <input
-                  type="date"
-                  value={filters.startDate}
-                  onChange={(e) =>
-                    handleFilterChange("startDate", e.target.value)
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Fecha Fin
-                </label>
-                <input
-                  type="date"
-                  value={filters.endDate}
-                  onChange={(e) =>
-                    handleFilterChange("endDate", e.target.value)
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-                />
-              </div>
-            </div>
-
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={clearFilters}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
-              >
-                Limpiar Filtros
-              </button>
-            </div>
-          </div>
-
-          {/* Lista de Logs */}
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">
-                Logs del Sistema ({totalRecords} registros totales)
-              </h3>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Acción
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Usuario
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Base de Datos
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Tabla
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Registros
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Fecha/Hora
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Detalles
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {logs.map((log) => (
-                    <tr key={log.Id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getActionColor(
-                            log.Action
-                          )}`}
-                        >
-                          {log.Action}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {log.Username}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {log.DatabaseName}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {log.TableName}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {log.AffectedRows}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatTimestamp(log.Timestamp)}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
-                        <details className="cursor-pointer">
-                          <summary className="hover:text-blue-600">
-                            Ver detalles
-                          </summary>
-                          <div className="mt-2 space-y-2 text-xs">
-                            {log.RecordId && (
-                              <div>
-                                <strong>ID:</strong> {log.RecordId}
-                              </div>
-                            )}
-                            {log.OldData && (
-                              <div>
-                                <strong>Datos Anteriores:</strong>
-                                <pre className="mt-1 p-2 bg-gray-100 rounded text-xs overflow-x-auto">
-                                  {truncateData(log.OldData)}
-                                </pre>
-                              </div>
-                            )}
-                            {log.NewData && (
-                              <div>
-                                <strong>Datos Nuevos:</strong>
-                                <pre className="mt-1 p-2 bg-gray-100 rounded text-xs overflow-x-auto">
-                                  {truncateData(log.NewData)}
-                                </pre>
-                              </div>
-                            )}
-                          </div>
-                        </details>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {logs.length === 0 && (
-              <div className="text-center py-8">
-                <p className="text-gray-500">
-                  No se encontraron logs con los filtros aplicados
-                </p>
-              </div>
-            )}
-
-            {/* Componente de paginación */}
-            {totalRecords > 0 && (
-              <Pagination
-                currentPage={currentPage}
-                totalPages={Math.ceil(totalRecords / recordsPerPage)}
-                totalRecords={totalRecords}
-                recordsPerPage={recordsPerPage}
-                onPageChange={handlePageChange}
-                onRecordsPerPageChange={handleRecordsPerPageChange}
-              />
-            )}
-          </div>
-        </>
-      )}
-
-      {currentView === "stats" && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-6">
-            Estadísticas de Actividad
+      {/* Lista de Logs */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-medium text-gray-900">
+            Logs del Sistema ({totalRecords} registros totales)
           </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {stats.map((stat) => (
-              <div key={stat.Action} className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-center">
-                  <div
-                    className={`p-2 rounded-lg ${getActionColor(stat.Action)}`}
-                  >
-                    <span className="text-lg">
-                      {getActionIcon(stat.Action)}
-                    </span>
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-900">
-                      {stat.Action}
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {stat.Count}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-4 space-y-1">
-                  <p className="text-xs text-gray-500">
-                    Usuarios únicos: {stat.UniqueUsers}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Tablas únicas: {stat.UniqueTables}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {stats.length === 0 && (
-            <div className="text-center py-8">
-              <p className="text-gray-500">No hay estadísticas disponibles</p>
-            </div>
-          )}
         </div>
-      )}
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Acción
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Usuario
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Base de Datos
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Tabla
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Registros
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Fecha/Hora
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Detalles
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {logs.map((log) => (
+                <tr key={log.Id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getActionColor(
+                        log.Action
+                      )}`}
+                    >
+                      {log.Action}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {log.Username}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {log.DatabaseName}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {log.TableName}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {log.AffectedRows}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {formatTimestamp(log.Timestamp)}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    <details className="cursor-pointer">
+                      <summary className="hover:text-blue-600">
+                        Ver detalles
+                      </summary>
+                      <div className="mt-2 space-y-2 text-xs">
+                        {log.RecordId && (
+                          <div>
+                            <strong>ID:</strong> {log.RecordId}
+                          </div>
+                        )}
+                        {log.OldData && (
+                          <div>
+                            <strong>Datos Anteriores:</strong>
+                            <pre className="mt-1 p-2 bg-gray-100 rounded text-xs overflow-x-auto">
+                              {truncateData(log.OldData)}
+                            </pre>
+                          </div>
+                        )}
+                        {log.NewData && (
+                          <div>
+                            <strong>Datos Nuevos:</strong>
+                            <pre className="mt-1 p-2 bg-gray-100 rounded text-xs overflow-x-auto">
+                              {truncateData(log.NewData)}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    </details>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {logs.length === 0 && (
+          <div className="text-center py-8">
+            <p className="text-gray-500">
+              No se encontraron logs con los filtros aplicados
+            </p>
+          </div>
+        )}
+
+        {/* Componente de paginación */}
+        {totalRecords > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={Math.ceil(totalRecords / recordsPerPage)}
+            totalRecords={totalRecords}
+            recordsPerPage={recordsPerPage}
+            onPageChange={handlePageChange}
+            onRecordsPerPageChange={handleRecordsPerPageChange}
+          />
+        )}
+      </div>
     </div>
   );
 };

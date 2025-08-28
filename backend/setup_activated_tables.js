@@ -48,3 +48,12 @@ if (require.main === module) {
 }
 
 module.exports = { setupActivatedTables };
+
+
+
+
+
+
+
+
+

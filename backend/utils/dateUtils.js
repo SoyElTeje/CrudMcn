@@ -123,8 +123,19 @@ function formatDateDDMMYYYY(date) {
       dateObj = parseDateDDMMYYYY(date);
 
       if (!dateObj) {
-        // Si no funciona, intentar con el formato estándar
-        dateObj = new Date(date);
+        // Si es formato ISO (YYYY-MM-DD), parsearlo correctamente
+        const isoMatch = date.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+        if (isoMatch) {
+          const year = parseInt(isoMatch[1], 10);
+          const month = parseInt(isoMatch[2], 10) - 1; // Los meses van de 0 a 11
+          const day = parseInt(isoMatch[3], 10);
+          // Usar zona horaria local en lugar de UTC para evitar problemas de conversión
+          dateObj = new Date(year, month, day);
+        } else {
+          // Si no funciona, intentar con el formato estándar
+          dateObj = new Date(date);
+        }
+
         if (isNaN(dateObj.getTime())) {
           return "";
         }

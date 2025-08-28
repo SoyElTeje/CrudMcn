@@ -125,6 +125,16 @@ function parseValueByType(value, dataType) {
   if (
     ["datetime", "datetime2", "date", "smalldatetime"].includes(normalizedType)
   ) {
+    // Importar las utilidades de fecha
+    const { parseDateDDMMYYYY, convertToISODate } = require("./dateUtils");
+
+    // Intentar parsear como DD/MM/AAAA primero
+    const parsedDate = parseDateDDMMYYYY(value);
+    if (parsedDate) {
+      return parsedDate;
+    }
+
+    // Si no funciona, intentar con el formato estándar
     const date = new Date(value);
     return isNaN(date.getTime()) ? null : date;
   }
@@ -151,7 +161,17 @@ function buildSelectQuery(tableName, filters, sort, limit, offset, request) {
   const whereClause = buildWhereClause(filters, request);
   const orderByClause = buildOrderByClause(sort);
 
-  let query = `SELECT * FROM [${tableName}]`;
+  // Construir la lista de columnas para evitar conversión de zona horaria en fechas
+  let query = `SELECT `;
+
+  // Convertir fechas a string para evitar conversión automática a Date
+  query += `
+    *,
+    CASE 
+      WHEN FechaIngreso IS NOT NULL THEN CONVERT(VARCHAR(10), FechaIngreso, 120)
+      ELSE NULL 
+    END as FechaIngreso_String
+  FROM [${tableName}]`;
 
   if (whereClause) {
     query += ` ${whereClause}`;

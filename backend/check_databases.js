@@ -40,3 +40,12 @@ if (require.main === module) {
 }
 
 module.exports = { checkDatabases };
+
+
+
+
+
+
+
+
+
