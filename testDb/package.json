@@ -1,0 +1,22 @@
+{
+  "name": "test-db",
+  "version": "1.0.0",
+  "description": "Script de prueba para conexión a SQL Server",
+  "main": "test_db.js",
+  "scripts": {
+    "start": "node test_db.js",
+    "test": "node test_db.js"
+  },
+  "keywords": [
+    "sql-server",
+    "database",
+    "test",
+    "connection"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "mssql": "^11.0.1",
+    "dotenv": "^17.2.0"
+  }
+}
