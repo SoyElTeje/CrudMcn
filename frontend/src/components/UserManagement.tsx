@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 import { formatDate } from "../lib/dateUtils";
 import {
@@ -554,10 +554,15 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                             setShowEditForm(true);
                           }}
                         >
-                          <span key="desktop-password" className="hidden sm:inline">
+                          <span
+                            key="desktop-password"
+                            className="hidden sm:inline"
+                          >
                             Cambiar Contraseña
                           </span>
-                          <span key="mobile-password" className="sm:hidden">Contraseña</span>
+                          <span key="mobile-password" className="sm:hidden">
+                            Contraseña
+                          </span>
                         </Button>
                         <Button
                           key="permissions-button"
@@ -573,7 +578,10 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                           className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 text-xs"
                           onClick={() => handleToggleAdmin(user)}
                         >
-                          <span key="desktop-admin" className="hidden sm:inline">
+                          <span
+                            key="desktop-admin"
+                            className="hidden sm:inline"
+                          >
                             {user.isAdmin ? "Quitar Admin" : "Hacer Admin"}
                           </span>
                           <span key="mobile-admin" className="sm:hidden">
@@ -1110,8 +1118,14 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                                 key={`db-perm-${perm.databaseName}-${index}`}
                                 className="bg-white rounded-lg p-3 border border-gray-200"
                               >
-                                <div key="permission-content" className="flex flex-col gap-2">
-                                  <div key="permission-header" className="flex items-start justify-between gap-2">
+                                <div
+                                  key="permission-content"
+                                  className="flex flex-col gap-2"
+                                >
+                                  <div
+                                    key="permission-header"
+                                    className="flex items-start justify-between gap-2"
+                                  >
                                     <span className="font-medium text-gray-900 break-all flex-1 min-w-0">
                                       {perm.databaseName}
                                     </span>
@@ -1192,8 +1206,14 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                                 key={`table-perm-${perm.databaseName}-${perm.tableName}-${index}`}
                                 className="bg-white rounded-lg p-3 border border-gray-200"
                               >
-                                <div key="table-permission-content" className="flex flex-col gap-2">
-                                  <div key="table-permission-header" className="flex items-start justify-between gap-2">
+                                <div
+                                  key="table-permission-content"
+                                  className="flex flex-col gap-2"
+                                >
+                                  <div
+                                    key="table-permission-header"
+                                    className="flex items-start justify-between gap-2"
+                                  >
                                     <span className="font-medium text-gray-900 break-all flex-1 min-w-0">
                                       {perm.databaseName}.{perm.tableName}
                                     </span>

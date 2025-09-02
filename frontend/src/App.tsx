@@ -23,7 +23,7 @@ import LogsViewer from "./components/LogsViewer";
 import { AdvancedFilters } from "./components/AdvancedFilters";
 import ActivatedTablesManager from "./components/ActivatedTablesManager";
 import { ValidationErrorModal } from "./components/ValidationErrorModal";
-import { formatDate, formatDateTime } from "./lib/dateUtils";
+// Removed unused imports
 import { useTableContext } from "./contexts/TableContext";
 import "./App.css";
 
@@ -906,7 +906,9 @@ function App() {
         }
 
         try {
-          const tablesResponse = await api.get(`/api/databases/${db.name}/tables`);
+          const tablesResponse = await api.get(
+            `/api/databases/${db.name}/tables`
+          );
           const dbTables = tablesResponse.data.map((table: any) => ({
             ...table,
             database: db.name,

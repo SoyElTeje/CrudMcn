@@ -9,7 +9,7 @@ import {
 } from "./ui/select";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Checkbox } from "./ui/checkbox";
+// Removed unused Checkbox import
 
 interface ColumnStructure {
   ColumnName: string;
@@ -42,7 +42,7 @@ const AddConditionModal: React.FC<AddConditionModalProps> = ({
   onClose,
   onSave,
   tableStructure,
-  existingConditions,
+  // existingConditions, // Removed unused parameter
 }) => {
   const [selectedColumn, setSelectedColumn] = useState<string>("");
   const [conditionType, setConditionType] = useState<string>("");
@@ -51,7 +51,7 @@ const AddConditionModal: React.FC<AddConditionModalProps> = ({
 
   // Obtener columnas disponibles (excluyendo las que ya tienen condiciones)
   const availableColumns = tableStructure.filter(
-    (col) => true // Permitir múltiples condiciones por campo
+    (_col) => true // Permitir múltiples condiciones por campo
   );
 
   // Obtener el tipo de dato de la columna seleccionada

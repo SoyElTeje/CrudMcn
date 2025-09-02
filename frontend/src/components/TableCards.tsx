@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Button } from "./ui/button";
+import { useState } from "react";
+// Removed unused Button import
 
 interface TableInfo {
   schema: string;
