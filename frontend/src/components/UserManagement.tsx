@@ -53,7 +53,7 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [databases, setDatabases] = useState<string[]>([]);
+  const [databases, setDatabases] = useState<Array<{ name: string }>>([]);
   const [tables, setTables] = useState<Array<{ schema: string; name: string }>>(
     []
   );
@@ -546,6 +546,7 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                     <TableCell>
                       <div className="flex flex-col sm:flex-row gap-2">
                         <Button
+                          key="password-button"
                           size="sm"
                           className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 text-xs"
                           onClick={() => {
@@ -553,12 +554,13 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                             setShowEditForm(true);
                           }}
                         >
-                          <span className="hidden sm:inline">
+                          <span key="desktop-password" className="hidden sm:inline">
                             Cambiar Contraseña
                           </span>
-                          <span className="sm:hidden">Contraseña</span>
+                          <span key="mobile-password" className="sm:hidden">Contraseña</span>
                         </Button>
                         <Button
+                          key="permissions-button"
                           size="sm"
                           className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 text-xs"
                           onClick={() => openPermissionsModal(user)}
@@ -566,18 +568,20 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                           Permisos
                         </Button>
                         <Button
+                          key="admin-button"
                           size="sm"
                           className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600 text-xs"
                           onClick={() => handleToggleAdmin(user)}
                         >
-                          <span className="hidden sm:inline">
+                          <span key="desktop-admin" className="hidden sm:inline">
                             {user.isAdmin ? "Quitar Admin" : "Hacer Admin"}
                           </span>
-                          <span className="sm:hidden">
+                          <span key="mobile-admin" className="sm:hidden">
                             {user.isAdmin ? "Quitar" : "Admin"}
                           </span>
                         </Button>
                         <Button
+                          key="delete-button"
                           size="sm"
                           onClick={() => handleDeleteUser(user)}
                           className="bg-red-600 hover:bg-red-700 text-white border-red-600 text-xs"
@@ -787,8 +791,8 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                         <SelectContent className="bg-white text-gray-900 border border-gray-200">
                           {databases.map((db) => (
                             <SelectItem
-                              key={db}
-                              value={db}
+                              key={db.name}
+                              value={db.name}
                               className="text-gray-900 hover:bg-gray-100"
                             >
                               <div className="flex items-center">
@@ -805,7 +809,7 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                                     d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
                                   />
                                 </svg>
-                                {db}
+                                {db.name}
                               </div>
                             </SelectItem>
                           ))}
@@ -915,8 +919,8 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                           <SelectContent className="bg-white text-gray-900 border border-gray-200">
                             {databases.map((db) => (
                               <SelectItem
-                                key={db}
-                                value={db}
+                                key={db.name}
+                                value={db.name}
                                 className="text-gray-900 hover:bg-gray-100"
                               >
                                 <div className="flex items-center">
@@ -933,7 +937,7 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                                       d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
                                     />
                                   </svg>
-                                  {db}
+                                  {db.name}
                                 </div>
                               </SelectItem>
                             ))}
@@ -1081,7 +1085,7 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                 ) : userPermissions ? (
                   <div className="space-y-6">
                     {/* Permisos de Base de Datos */}
-                    {userPermissions.databasePermissions.length > 0 && (
+                    {userPermissions?.databasePermissions?.length > 0 && (
                       <div>
                         <h5 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
                           <svg
@@ -1100,18 +1104,19 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                           Bases de Datos
                         </h5>
                         <div className="space-y-2">
-                          {userPermissions.databasePermissions.map(
+                          {userPermissions.databasePermissions?.map(
                             (perm, index) => (
                               <div
-                                key={index}
+                                key={`db-perm-${perm.databaseName}-${index}`}
                                 className="bg-white rounded-lg p-3 border border-gray-200"
                               >
-                                <div className="flex flex-col gap-2">
-                                  <div className="flex items-start justify-between gap-2">
+                                <div key="permission-content" className="flex flex-col gap-2">
+                                  <div key="permission-header" className="flex items-start justify-between gap-2">
                                     <span className="font-medium text-gray-900 break-all flex-1 min-w-0">
                                       {perm.databaseName}
                                     </span>
                                     <Button
+                                      key={`remove-db-${perm.databaseName}`}
                                       size="sm"
                                       onClick={() =>
                                         handleRemoveDatabasePermissions(
@@ -1162,7 +1167,7 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                     )}
 
                     {/* Permisos de Tablas */}
-                    {userPermissions.tablePermissions.length > 0 && (
+                    {userPermissions?.tablePermissions?.length > 0 && (
                       <div>
                         <h5 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
                           <svg
@@ -1181,18 +1186,19 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                           Tablas Específicas
                         </h5>
                         <div className="space-y-2">
-                          {userPermissions.tablePermissions.map(
+                          {userPermissions.tablePermissions?.map(
                             (perm, index) => (
                               <div
-                                key={index}
+                                key={`table-perm-${perm.databaseName}-${perm.tableName}-${index}`}
                                 className="bg-white rounded-lg p-3 border border-gray-200"
                               >
-                                <div className="flex flex-col gap-2">
-                                  <div className="flex items-start justify-between gap-2">
+                                <div key="table-permission-content" className="flex flex-col gap-2">
+                                  <div key="table-permission-header" className="flex items-start justify-between gap-2">
                                     <span className="font-medium text-gray-900 break-all flex-1 min-w-0">
                                       {perm.databaseName}.{perm.tableName}
                                     </span>
                                     <Button
+                                      key={`remove-table-${perm.databaseName}-${perm.tableName}`}
                                       size="sm"
                                       onClick={() =>
                                         handleRemoveTablePermissions(
@@ -1243,8 +1249,8 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                       </div>
                     )}
 
-                    {userPermissions.databasePermissions.length === 0 &&
-                      userPermissions.tablePermissions.length === 0 && (
+                    {userPermissions?.databasePermissions?.length === 0 &&
+                      userPermissions?.tablePermissions?.length === 0 && (
                         <div className="text-center py-8">
                           <svg
                             className="w-12 h-12 text-gray-400 mx-auto mb-3"
