@@ -9,6 +9,8 @@ import {
   SelectItem,
 } from "./ui/select";
 import { useTableContext } from "../contexts/TableContext";
+import AddConditionModal from "./AddConditionModal";
+import ActiveConditionsList from "./ActiveConditionsList";
 
 interface DatabaseInfo {
   DatabaseName: string;
@@ -43,10 +45,10 @@ interface ColumnStructure {
 interface TableCondition {
   id?: number;
   columnName: string;
-  dataType: string;
+  dataType?: string;
   conditionType: string;
   conditionValue: string;
-  isRequired: boolean;
+  isRequired?: boolean;
 }
 
 const ActivatedTablesManager: React.FC = () => {
@@ -59,11 +61,14 @@ const ActivatedTablesManager: React.FC = () => {
   const [conditions, setConditions] = useState<TableCondition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [currentView, setCurrentView] = useState<
-    "list" | "activate" | "manage" | "edit"
+    "list" | "activate" | "manage"
   >("list");
-  const [editingTable, setEditingTable] = useState<ActivatedTable | null>(null);
+
+  // Estado para el modal de agregar condición
+  const [showAddConditionModal, setShowAddConditionModal] = useState(false);
 
   // Contexto para comunicación con App.tsx
   const { refreshTables } = useTableContext();
@@ -154,27 +159,10 @@ const ActivatedTablesManager: React.FC = () => {
     tableName: string
   ) => {
     try {
-      console.log(
-        `🔍 Fetching table structure for ${databaseName}.${tableName}`
-      );
       const data = await api.get(
         `/api/activated-tables/structure/${databaseName}/${tableName}`
       );
-      console.log(`✅ Table structure received:`, data);
       setTableStructure(data);
-
-      // Inicializar condiciones vacías para cada columna
-      const initialConditions: TableCondition[] = data.map(
-        (column: ColumnStructure) => ({
-          columnName: column.ColumnName,
-          dataType: getDataType(column.DataType),
-          conditionType: "",
-          conditionValue: "",
-          isRequired: false,
-        })
-      );
-      console.log(`✅ Initial conditions created:`, initialConditions);
-      setConditions(initialConditions);
     } catch (err) {
       console.error("Error fetching table structure:", err);
     }
@@ -185,443 +173,196 @@ const ActivatedTablesManager: React.FC = () => {
     tableName: string
   ) => {
     try {
+      console.log(`🔍 Fetching conditions for ${databaseName}.${tableName}...`);
+
       const data = await api.get(
         `/api/activated-tables/conditions/${databaseName}/${tableName}`
       );
 
-      console.log(`🔍 Raw conditions from database:`, data);
-
-      // Convertir las condiciones del backend al formato del frontend
-      const convertedConditions: TableCondition[] = data.map(
-        (condition: any) => ({
-          id: condition.Id,
-          columnName: condition.ColumnName,
-          dataType: condition.DataType,
-          conditionType: condition.ConditionType || "",
-          conditionValue: condition.ConditionValue || "",
-          isRequired: condition.IsRequired || false,
-        })
+      console.log(
+        "📥 Conditions received from backend:",
+        JSON.stringify(data, null, 2)
       );
+      console.log("📊 Data type:", typeof data);
+      console.log("📊 Is array:", Array.isArray(data));
+      console.log("📊 Length:", data?.length);
 
-      // Solo actualizar las condiciones si hay datos, sino mantener las iniciales
-      if (convertedConditions.length > 0) {
-        console.log(`✅ Conditions loaded from database:`, convertedConditions);
-        setConditions(convertedConditions);
-      } else {
-        console.log(
-          `ℹ️ No conditions found in database, keeping initial conditions`
-        );
+      if (data && Array.isArray(data) && data.length > 0) {
+        console.log("🔍 First condition details:");
+        console.log("  - columnName:", data[0].columnName);
+        console.log("  - dataType:", data[0].dataType);
+        console.log("  - conditionType:", data[0].conditionType);
+        console.log("  - conditionValue:", data[0].conditionValue);
+        console.log("  - isRequired:", data[0].isRequired);
       }
+
+      setConditions(data);
+      console.log("✅ Conditions set in state");
     } catch (err) {
-      console.error("Error fetching table conditions:", err);
-      console.log(`ℹ️ Error loading conditions, keeping initial conditions`);
+      console.error("❌ Error fetching table conditions:", err);
     }
   };
 
-  const handleEditTable = async (table: ActivatedTable) => {
-    setEditingTable(table);
+  const activateTable = async (databaseName: string, tableName: string) => {
+    try {
+      await api.post("/api/activated-tables/activate", {
+        databaseName,
+        tableName,
+        description,
+      });
+
+      await fetchActivatedTables();
+      setCurrentView("list");
+      setDescription("");
+      refreshTables();
+    } catch (err) {
+      console.error("Error activating table:", err);
+      setError("Error al activar la tabla");
+    }
+  };
+
+  const deactivateTable = async (databaseName: string, tableName: string) => {
+    try {
+      await api.put("/api/activated-tables/deactivate", {
+        databaseName,
+        tableName,
+      });
+
+      await fetchActivatedTables();
+      refreshTables();
+    } catch (err) {
+      console.error("Error deactivating table:", err);
+      setError("Error al desactivar la tabla");
+    }
+  };
+
+  const updateTableConditions = async (
+    databaseName: string,
+    tableName: string
+  ) => {
+    try {
+      console.log("🔍 Debug: Datos antes de enviar al backend:");
+      console.log("  - databaseName:", databaseName);
+      console.log("  - tableName:", tableName);
+      console.log("  - conditions:", JSON.stringify(conditions, null, 2));
+      console.log("  - conditions.length:", conditions.length);
+      console.log("  - description:", description);
+
+      // Verificar que conditions no esté vacío
+      if (!conditions || conditions.length === 0) {
+        console.error("❌ No hay condiciones para enviar");
+        setError("No hay condiciones para actualizar");
+        return;
+      }
+
+      // Verificar que cada condición tenga todos los campos requeridos
+      for (let i = 0; i < conditions.length; i++) {
+        const condition = conditions[i];
+        console.log(
+          `🔍 Validando condición ${i + 1}:`,
+          JSON.stringify(condition, null, 2)
+        );
+
+        if (!condition.columnName) {
+          console.error(`❌ Condición ${i + 1} no tiene columnName`);
+          setError(`Condición ${i + 1} no tiene nombre de columna`);
+          return;
+        }
+
+        if (!condition.dataType) {
+          console.error(`❌ Condición ${i + 1} no tiene dataType`);
+          setError(`Condición ${i + 1} no tiene tipo de dato`);
+          return;
+        }
+
+        if (!condition.conditionType) {
+          console.error(`❌ Condición ${i + 1} no tiene conditionType`);
+          setError(`Condición ${i + 1} no tiene tipo de condición`);
+          return;
+        }
+      }
+
+      console.log("📤 Enviando request al backend...");
+      const response = await api.put(
+        `/api/activated-tables/conditions/${databaseName}/${tableName}`,
+        {
+          conditions,
+          description,
+        }
+      );
+
+      console.log("✅ Respuesta del backend:", response);
+
+      setError(null);
+      setSuccess("Condiciones y descripción actualizadas exitosamente");
+
+      // Recargar las condiciones desde el backend para asegurar sincronización
+      await fetchTableConditions(databaseName, tableName);
+
+      // Recargar la lista de tablas activadas para mostrar la descripción actualizada
+      await fetchActivatedTables();
+
+      // Actualizar el contexto para que otras partes de la app sepan que hubo cambios
+      refreshTables();
+
+      // Limpiar el mensaje de éxito después de 3 segundos
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error("❌ Error updating table conditions:", err);
+      setError("Error al actualizar las condiciones");
+    }
+  };
+
+  const handleDatabaseChange = (databaseName: string) => {
+    setSelectedDatabase(databaseName);
+    setSelectedTable("");
+    setTableStructure([]);
+    setConditions([]);
+    if (databaseName) {
+      fetchTablesByDatabase(databaseName);
+    }
+  };
+
+  const handleTableChange = (tableName: string) => {
+    setSelectedTable(tableName);
+    if (tableName) {
+      fetchTableStructure(selectedDatabase, tableName);
+      fetchTableConditions(selectedDatabase, tableName);
+    }
+  };
+
+  const handleAddCondition = (newCondition: TableCondition) => {
+    console.log("🔍 Debug: Agregando nueva condición:");
+    console.log("  - newCondition:", JSON.stringify(newCondition, null, 2));
+    console.log(
+      "  - conditions actuales:",
+      JSON.stringify(conditions, null, 2)
+    );
+
+    const updatedConditions = [...conditions, newCondition];
+    console.log(
+      "  - conditions actualizadas:",
+      JSON.stringify(updatedConditions, null, 2)
+    );
+
+    setConditions(updatedConditions);
+
+    console.log("✅ Condición agregada al estado local");
+  };
+
+  const handleDeleteCondition = (conditionId: number) => {
+    setConditions(conditions.filter((c) => c.id !== conditionId));
+  };
+
+  const handleManageTable = (table: ActivatedTable) => {
     setSelectedDatabase(table.DatabaseName);
     setSelectedTable(table.TableName);
     setDescription(table.Description);
-
-    // Cargar estructura y condiciones
-    await fetchTableStructure(table.DatabaseName, table.TableName);
-    await fetchTableConditions(table.DatabaseName, table.TableName);
-
-    setCurrentView("edit");
-  };
-
-  const handleUpdateConditions = async () => {
-    if (!editingTable) return;
-
-    try {
-      setLoading(true);
-
-      // Filtrar condiciones que tienen configuración (excluir "none")
-      const activeConditions = conditions.filter(
-        (condition) =>
-          condition.conditionType &&
-          condition.conditionType !== "none" &&
-          condition.conditionValue
-      );
-
-      await api.put(
-        `/api/activated-tables/conditions/${editingTable.DatabaseName}/${editingTable.TableName}`,
-        {
-          conditions: activeConditions,
-        }
-      );
-
-      setError(null);
-      setCurrentView("list");
-      setEditingTable(null);
-      fetchActivatedTables();
-    } catch (err: any) {
-      setError(err.message || "Error actualizando condiciones");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getDataType = (sqlDataType: string): string => {
-    const type = sqlDataType.toLowerCase();
-    if (
-      type.includes("char") ||
-      type.includes("text") ||
-      type.includes("varchar")
-    ) {
-      return "string";
-    } else if (
-      type.includes("int") ||
-      type.includes("decimal") ||
-      type.includes("float") ||
-      type.includes("numeric")
-    ) {
-      return "numeric";
-    } else if (type.includes("date") || type.includes("time")) {
-      return "date";
-    } else if (type.includes("bit") || type.includes("bool")) {
-      return "boolean";
-    }
-    return "string"; // default
-  };
-
-  const getConditionTypes = (dataType: string) => {
-    switch (dataType) {
-      case "string":
-        return [
-          { value: "length", label: "Longitud (min/max)" },
-          { value: "contains", label: "Contiene texto" },
-          { value: "regex", label: "Expresión regular" },
-          { value: "starts_with", label: "Comienza con" },
-          { value: "ends_with", label: "Termina con" },
-        ];
-      case "numeric":
-        return [
-          { value: "range", label: "Rango (min/max)" },
-          { value: "min", label: "Valor mínimo" },
-          { value: "max", label: "Valor máximo" },
-        ];
-      case "date":
-        return [
-          { value: "range", label: "Rango de fechas" },
-          { value: "before", label: "Antes de" },
-          { value: "after", label: "Después de" },
-        ];
-      case "boolean":
-        return [{ value: "value", label: "Valor específico" }];
-      default:
-        return [];
-    }
-  };
-
-  const handleActivateTable = async () => {
-    if (!selectedDatabase || !selectedTable || !description.trim()) {
-      setError(
-        "Debe seleccionar una base de datos, una tabla y proporcionar una descripción"
-      );
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      // Filtrar condiciones que tienen configuración (excluir "none")
-      const activeConditions = conditions.filter(
-        (condition) =>
-          condition.conditionType &&
-          condition.conditionType !== "none" &&
-          condition.conditionValue
-      );
-
-      await api.post("/api/activated-tables/activate", {
-        databaseName: selectedDatabase,
-        tableName: selectedTable,
-        description: description.trim(),
-        conditions: activeConditions,
-      });
-
-      setError(null);
-      setCurrentView("list");
-      fetchActivatedTables();
-
-      // Actualizar la lista de tablas en App.tsx
-      if (typeof refreshTables === "function") {
-        refreshTables();
-      }
-    } catch (err: any) {
-      setError(err.message || "Error activando tabla");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeactivateTable = async (table: ActivatedTable) => {
-    try {
-      await api.post("/api/activated-tables/deactivate", {
-        databaseName: table.DatabaseName,
-        tableName: table.TableName,
-      });
-
-      fetchActivatedTables();
-
-      // Actualizar la lista de tablas en App.tsx
-      if (typeof refreshTables === "function") {
-        refreshTables();
-      }
-    } catch (err: any) {
-      setError(err.message || "Error desactivando tabla");
-    }
-  };
-
-  const handleConditionChange = (
-    index: number,
-    field: keyof TableCondition,
-    value: any
-  ) => {
-    const newConditions = [...conditions];
-    newConditions[index] = { ...newConditions[index], [field]: value };
-    setConditions(newConditions);
-  };
-
-  const addConditionForColumn = (columnName: string, dataType: string) => {
-    const newCondition: TableCondition = {
-      columnName,
-      dataType,
-      conditionType: "",
-      conditionValue: "",
-      isRequired: false,
-    };
-    setConditions([...conditions, newCondition]);
-  };
-
-  const removeCondition = (index: number) => {
-    const newConditions = conditions.filter((_, i) => i !== index);
-    setConditions(newConditions);
-  };
-
-  const getConditionsForColumn = (columnName: string) => {
-    return conditions.filter(
-      (condition) => condition.columnName === columnName
-    );
-  };
-
-  const renderConditionInput = (condition: TableCondition, index: number) => {
-    const { dataType, conditionType } = condition;
-
-    switch (conditionType) {
-      case "length":
-        const currentValue = condition.conditionValue
-          ? JSON.parse(condition.conditionValue)
-          : {};
-        return (
-          <div className="flex gap-2">
-            <input
-              type="number"
-              placeholder="Min"
-              value={currentValue.min || ""}
-              className="flex-1 px-2 py-1 border rounded text-gray-900 bg-white"
-              onChange={(e) => {
-                const value = JSON.stringify({
-                  ...currentValue,
-                  min: parseInt(e.target.value) || undefined,
-                });
-                handleConditionChange(index, "conditionValue", value);
-              }}
-            />
-            <input
-              type="number"
-              placeholder="Max"
-              value={currentValue.max || ""}
-              className="flex-1 px-2 py-1 border rounded text-gray-900 bg-white"
-              onChange={(e) => {
-                const value = JSON.stringify({
-                  ...currentValue,
-                  max: parseInt(e.target.value) || undefined,
-                });
-                handleConditionChange(index, "conditionValue", value);
-              }}
-            />
-          </div>
-        );
-
-      case "contains":
-      case "starts_with":
-      case "ends_with":
-        return (
-          <input
-            type="text"
-            placeholder="Texto"
-            value={
-              condition.conditionValue
-                ? JSON.parse(condition.conditionValue).text || ""
-                : ""
-            }
-            className="w-full px-2 py-1 border rounded text-gray-900 bg-white"
-            onChange={(e) => {
-              const value = JSON.stringify({ text: e.target.value });
-              handleConditionChange(index, "conditionValue", value);
-            }}
-          />
-        );
-
-      case "regex":
-        return (
-          <input
-            type="text"
-            placeholder="Patrón regex"
-            value={
-              condition.conditionValue
-                ? JSON.parse(condition.conditionValue).pattern || ""
-                : ""
-            }
-            className="w-full px-2 py-1 border rounded text-gray-900 bg-white"
-            onChange={(e) => {
-              const value = JSON.stringify({ pattern: e.target.value });
-              handleConditionChange(index, "conditionValue", value);
-            }}
-          />
-        );
-
-      case "range":
-        if (dataType === "numeric") {
-          const currentValue = condition.conditionValue
-            ? JSON.parse(condition.conditionValue)
-            : {};
-          return (
-            <div className="flex gap-2">
-              <input
-                type="number"
-                placeholder="Min"
-                value={currentValue.min || ""}
-                className="flex-1 px-2 py-1 border rounded text-gray-900 bg-white"
-                onChange={(e) => {
-                  const value = JSON.stringify({
-                    ...currentValue,
-                    min: parseFloat(e.target.value) || undefined,
-                  });
-                  handleConditionChange(index, "conditionValue", value);
-                }}
-              />
-              <input
-                type="number"
-                placeholder="Max"
-                value={currentValue.max || ""}
-                className="flex-1 px-2 py-1 border rounded text-gray-900 bg-white"
-                onChange={(e) => {
-                  const value = JSON.stringify({
-                    ...currentValue,
-                    max: parseFloat(e.target.value) || undefined,
-                  });
-                  handleConditionChange(index, "conditionValue", value);
-                }}
-              />
-            </div>
-          );
-        } else if (dataType === "date") {
-          const currentValue = condition.conditionValue
-            ? JSON.parse(condition.conditionValue)
-            : {};
-          return (
-            <div className="flex gap-2">
-              <input
-                type="date"
-                value={currentValue.min || ""}
-                className="flex-1 px-2 py-1 border rounded text-gray-900 bg-white"
-                onChange={(e) => {
-                  const value = JSON.stringify({
-                    ...currentValue,
-                    min: e.target.value,
-                  });
-                  handleConditionChange(index, "conditionValue", value);
-                }}
-              />
-              <input
-                type="date"
-                value={currentValue.max || ""}
-                className="flex-1 px-2 py-1 border rounded text-gray-900 bg-white"
-                onChange={(e) => {
-                  const value = JSON.stringify({
-                    ...currentValue,
-                    max: e.target.value,
-                  });
-                  handleConditionChange(index, "conditionValue", value);
-                }}
-              />
-            </div>
-          );
-        }
-        break;
-
-      case "min":
-      case "max":
-        return (
-          <input
-            type="number"
-            placeholder="Valor"
-            value={
-              condition.conditionValue
-                ? JSON.parse(condition.conditionValue).value || ""
-                : ""
-            }
-            className="w-full px-2 py-1 border rounded text-gray-900 bg-white"
-            onChange={(e) => {
-              const value = JSON.stringify({
-                value: parseFloat(e.target.value) || 0,
-              });
-              handleConditionChange(index, "conditionValue", value);
-            }}
-          />
-        );
-
-      case "before":
-      case "after":
-        return (
-          <input
-            type="date"
-            value={
-              condition.conditionValue
-                ? JSON.parse(condition.conditionValue).date || ""
-                : ""
-            }
-            className="w-full px-2 py-1 border rounded text-gray-900 bg-white"
-            onChange={(e) => {
-              const value = JSON.stringify({ date: e.target.value });
-              handleConditionChange(index, "conditionValue", value);
-            }}
-          />
-        );
-
-      case "value":
-        return (
-          <Select
-            value={
-              condition.conditionValue
-                ? JSON.parse(condition.conditionValue).expected?.toString()
-                : ""
-            }
-            onValueChange={(value) => {
-              const boolValue = value === "true";
-              const jsonValue = JSON.stringify({ expected: boolValue });
-              handleConditionChange(index, "conditionValue", jsonValue);
-            }}
-          >
-            <SelectTrigger className="w-full bg-primary text-white border-primary">
-              <SelectValue placeholder="Seleccionar valor" />
-            </SelectTrigger>
-            <SelectContent className="bg-primary text-white">
-              <SelectItem value="true" className="text-white hover:bg-accent">
-                Verdadero
-              </SelectItem>
-              <SelectItem value="false" className="text-white hover:bg-accent">
-                Falso
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        );
-    }
-
-    return null;
+    setError(null);
+    setSuccess(null);
+    fetchTableStructure(table.DatabaseName, table.TableName);
+    fetchTableConditions(table.DatabaseName, table.TableName);
+    setCurrentView("manage");
   };
 
   useEffect(() => {
@@ -630,197 +371,162 @@ const ActivatedTablesManager: React.FC = () => {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    if (selectedDatabase && selectedTable) {
-      fetchTableStructure(selectedDatabase, selectedTable);
-    }
-  }, [selectedDatabase, selectedTable]);
-
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando...</p>
+        </div>
       </div>
     );
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-white">
-          Gestión de Tablas Activadas
-        </h2>
-        <div className="flex space-x-2">
-          <button
-            onClick={() => setCurrentView("list")}
-            className={`px-4 py-2 rounded-lg font-medium ${
-              currentView === "list"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-            }`}
+  if (currentView === "list") {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold text-white">
+            Gestión de Tablas Activadas
+          </h2>
+          <Button
+            onClick={() => {
+              setError(null);
+              setSuccess(null);
+              setCurrentView("activate");
+            }}
+            className="bg-blue-600 hover:bg-blue-700"
           >
-            Lista
-          </button>
-          <button
-            onClick={() => setCurrentView("activate")}
-            className={`px-4 py-2 rounded-lg font-medium ${
-              currentView === "activate"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-            }`}
-          >
-            Activar Tabla
-          </button>
+            Activar Nueva Tabla
+          </Button>
         </div>
-      </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg
-                className="h-5 w-5 text-red-400"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">Error</h3>
-              <div className="mt-2 text-sm text-red-700">{error}</div>
-            </div>
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-4">
+            <p className="text-red-800">{error}</p>
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-green-50 border border-green-200 rounded-md p-4">
+            <p className="text-green-800">{success}</p>
+          </div>
+        )}
+
+        <div className="bg-white shadow rounded-lg">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900">
+              Tablas Activadas ({activatedTables.length})
+            </h3>
+          </div>
+          <div className="divide-y divide-gray-200">
+            {activatedTables.length === 0 ? (
+              <div className="px-6 py-8 text-center text-gray-500">
+                <p>No hay tablas activadas</p>
+                <p className="text-sm mt-1">
+                  Activa una tabla para comenzar a configurar condiciones
+                </p>
+              </div>
+            ) : (
+              activatedTables.map((table) => (
+                <div
+                  key={`${table.DatabaseName}.${table.TableName}`}
+                  className="px-6 py-4 flex items-center justify-between hover:bg-gray-50"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3">
+                      <h4 className="text-lg font-medium text-gray-900">
+                        {table.DatabaseName}.{table.TableName}
+                      </h4>
+                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                        Activa
+                      </span>
+                    </div>
+                    {table.Description && (
+                      <p className="text-sm text-gray-600 mt-1">
+                        {table.Description}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-4 text-xs text-gray-500 mt-2">
+                      <span>Creada: {formatDate(table.CreatedAt)}</span>
+                      <span>Actualizada: {formatDate(table.UpdatedAt)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => handleManageTable(table)}
+                      className="text-white border-white hover:bg-white hover:text-gray-900"
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        deactivateTable(table.DatabaseName, table.TableName)
+                      }
+                      className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+                    >
+                      Desactivar
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {currentView === "list" && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
-            Tablas Activadas ({activatedTables.length})
-          </h3>
-
-          {activatedTables.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">No hay tablas activadas</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Base de Datos
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Tabla
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Descripción
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Estado
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Fecha Creación
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Fecha Actualización
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Acciones
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {activatedTables.map((table) => (
-                    <tr key={table.Id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {table.DatabaseName}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {table.TableName}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
-                        {table.Description}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            table.IsActive
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {table.IsActive ? "Activa" : "Inactiva"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(table.CreatedAt)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(table.UpdatedAt)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => handleEditTable(table)}
-                            className="text-blue-600 hover:text-blue-900"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            onClick={() => handleDeactivateTable(table)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Desactivar
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {currentView === "activate" && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
+  if (currentView === "activate") {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setError(null);
+              setSuccess(null);
+              setCurrentView("list");
+            }}
+            className="text-gray-600"
+          >
+            ← Volver
+          </Button>
+          <h2 className="text-2xl font-bold text-gray-900">
             Activar Nueva Tabla
-          </h3>
+          </h2>
+        </div>
 
-          <div className="space-y-4">
-            {/* Selección de base de datos */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-4">
+            <p className="text-red-800">{error}</p>
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-green-50 border border-green-200 rounded-md p-4">
+            <p className="text-green-800">{success}</p>
+          </div>
+        )}
+
+        <div className="bg-white shadow rounded-lg p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Seleccionar Base de Datos
+                Base de Datos
               </label>
               <Select
                 value={selectedDatabase}
-                onValueChange={(value) => {
-                  setSelectedDatabase(value);
-                  setSelectedTable(""); // Reset tabla cuando cambia la BD
-                  fetchTablesByDatabase(value);
-                }}
+                onValueChange={handleDatabaseChange}
               >
-                <SelectTrigger className="w-full bg-primary text-white border-primary">
+                <SelectTrigger>
                   <SelectValue placeholder="Seleccionar base de datos" />
                 </SelectTrigger>
-                <SelectContent className="bg-primary text-white">
+                <SelectContent>
                   {databases.map((db) => (
-                    <SelectItem
-                      key={db.DatabaseName}
-                      value={db.DatabaseName}
-                      className="text-white hover:bg-accent"
-                    >
+                    <SelectItem key={db.DatabaseName} value={db.DatabaseName}>
                       {db.DatabaseName}
                     </SelectItem>
                   ))}
@@ -828,361 +534,158 @@ const ActivatedTablesManager: React.FC = () => {
               </Select>
             </div>
 
-            {/* Selección de tabla */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Seleccionar Tabla
+                Tabla
               </label>
               <Select
                 value={selectedTable}
-                onValueChange={(value) => {
-                  setSelectedTable(value);
-                }}
+                onValueChange={handleTableChange}
                 disabled={!selectedDatabase}
               >
-                <SelectTrigger className="w-full bg-primary text-white border-primary">
-                  <SelectValue placeholder="Seleccionar tabla para activar" />
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar tabla" />
                 </SelectTrigger>
-                <SelectContent className="bg-primary text-white">
+                <SelectContent>
                   {tables.map((table) => (
-                    <SelectItem
-                      key={table.TableName}
-                      value={table.TableName}
-                      className="text-white hover:bg-accent"
-                    >
+                    <SelectItem key={table.TableName} value={table.TableName}>
                       {table.TableName}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+          </div>
 
-            {/* Descripción */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Descripción
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Descripción de la tabla..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-                rows={3}
-              />
-            </div>
+          <div className="mt-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Descripción (opcional)
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+              rows={3}
+              placeholder="Describe el propósito de esta tabla... (opcional)"
+            />
+          </div>
 
-            {/* Estructura y condiciones */}
-            {selectedDatabase && selectedTable && tableStructure.length > 0 && (
-              <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3">
-                  Configurar Condiciones por Columna
-                </h4>
-                <div className="space-y-4">
-                  {conditions.map((condition, index) => (
-                    <div key={index} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <h5 className="font-medium text-gray-900">
-                            {condition.columnName}
-                          </h5>
-                          <p className="text-sm text-gray-500">
-                            Tipo: {condition.dataType}
-                          </p>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <label className="flex items-center">
-                            <input
-                              type="checkbox"
-                              checked={condition.isRequired}
-                              onChange={(e) =>
-                                handleConditionChange(
-                                  index,
-                                  "isRequired",
-                                  e.target.checked
-                                )
-                              }
-                              className="mr-2"
-                            />
-                            <span className="text-sm text-gray-900">
-                              Requerido
-                            </span>
-                          </label>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Tipo de Condición
-                          </label>
-                          <Select
-                            value={condition.conditionType}
-                            onValueChange={(value) =>
-                              handleConditionChange(
-                                index,
-                                "conditionType",
-                                value
-                              )
-                            }
-                          >
-                            <SelectTrigger className="bg-primary text-white border-primary">
-                              <SelectValue placeholder="Seleccionar condición" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-primary text-white">
-                              <SelectItem
-                                value="none"
-                                className="text-white hover:bg-accent"
-                              >
-                                Sin condición
-                              </SelectItem>
-                              {getConditionTypes(condition.dataType).map(
-                                (type) => (
-                                  <SelectItem
-                                    key={type.value}
-                                    value={type.value}
-                                    className="text-white hover:bg-accent"
-                                  >
-                                    {type.label}
-                                  </SelectItem>
-                                )
-                              )}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Valor de Condición
-                          </label>
-                          {renderConditionInput(condition, index)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Botones */}
-            <div className="flex justify-end space-x-3 pt-4">
-              <button
-                onClick={() => setCurrentView("list")}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleActivateTable}
-                disabled={
-                  !selectedDatabase ||
-                  !selectedTable ||
-                  !description.trim() ||
-                  loading
-                }
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? "Activando..." : "Activar Tabla"}
-              </button>
-            </div>
+          <div className="mt-6 flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setCurrentView("list")}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => activateTable(selectedDatabase, selectedTable)}
+              disabled={!selectedDatabase || !selectedTable}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Activar Tabla
+            </Button>
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {/* Vista de edición de condiciones */}
-      {currentView === "edit" && editingTable && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
-            Editar Condiciones - {editingTable.DatabaseName}.
-            {editingTable.TableName}
-          </h3>
+  if (currentView === "manage") {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setError(null);
+              setSuccess(null);
+              setCurrentView("list");
+            }}
+            className="text-white border-white hover:bg-white hover:text-gray-900"
+          >
+            ← Volver
+          </Button>
+          <h2 className="text-2xl font-bold text-white">
+            Gestionar Condiciones - {selectedDatabase}.{selectedTable}
+          </h2>
+        </div>
 
-          <div className="space-y-4">
-            {/* Descripción */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Descripción
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Descripción de la tabla..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
-                rows={3}
-              />
-            </div>
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-4">
+            <p className="text-red-800">{error}</p>
+          </div>
+        )}
 
-            {/* Estructura y condiciones */}
-            {tableStructure.length > 0 && (
-              <div>
-                <h4 className="text-md font-medium text-gray-900 mb-3">
-                  Configurar Condiciones por Columna
-                </h4>
-                <div className="space-y-6">
-                  {tableStructure.map((column) => {
-                    const columnConditions = getConditionsForColumn(
-                      column.ColumnName
-                    );
-                    const dataType = getDataType(column.DataType);
+        {success && (
+          <div className="bg-green-50 border border-green-200 rounded-md p-4">
+            <p className="text-green-800">{success}</p>
+          </div>
+        )}
 
-                    return (
-                      <div
-                        key={column.ColumnName}
-                        className="border rounded-lg p-4"
-                      >
-                        <div className="flex items-center justify-between mb-4">
-                          <div>
-                            <h5 className="font-medium text-gray-900">
-                              {column.ColumnName}
-                            </h5>
-                            <p className="text-sm text-gray-500">
-                              Tipo: {dataType} ({column.DataType})
-                            </p>
-                          </div>
-                          <button
-                            onClick={() =>
-                              addConditionForColumn(column.ColumnName, dataType)
-                            }
-                            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-                          >
-                            + Agregar Condición
-                          </button>
-                        </div>
+        <div className="bg-white shadow rounded-lg p-6">
+          {/* Descripción de la tabla */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Descripción de la Tabla
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+              rows={3}
+              placeholder="Describe el propósito de esta tabla... (opcional)"
+            />
+          </div>
 
-                        {columnConditions.length === 0 ? (
-                          <p className="text-sm text-gray-500 italic">
-                            No hay condiciones configuradas para esta columna
-                          </p>
-                        ) : (
-                          <div className="space-y-3">
-                            {columnConditions.map((condition, index) => {
-                              const globalIndex = conditions.findIndex(
-                                (c) => c === condition
-                              );
-                              return (
-                                <div
-                                  key={globalIndex}
-                                  className="border-l-4 border-blue-200 pl-4 py-2"
-                                >
-                                  <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm font-medium text-gray-700">
-                                      Condición {index + 1}
-                                    </span>
-                                    <button
-                                      onClick={() =>
-                                        removeCondition(globalIndex)
-                                      }
-                                      className="text-red-600 hover:text-red-800 text-sm"
-                                    >
-                                      Eliminar
-                                    </button>
-                                  </div>
+          {/* Botón para agregar condición */}
+          <div className="mb-6">
+            <Button
+              onClick={() => setShowAddConditionModal(true)}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              + Agregar Condición
+            </Button>
+          </div>
 
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Tipo de Condición
-                                      </label>
-                                      <Select
-                                        value={condition.conditionType}
-                                        onValueChange={(value) =>
-                                          handleConditionChange(
-                                            globalIndex,
-                                            "conditionType",
-                                            value
-                                          )
-                                        }
-                                      >
-                                        <SelectTrigger className="bg-primary text-white border-primary">
-                                          <SelectValue placeholder="Seleccionar condición" />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-primary text-white">
-                                          <SelectItem
-                                            value="none"
-                                            className="text-white hover:bg-accent"
-                                          >
-                                            Sin condición
-                                          </SelectItem>
-                                          {getConditionTypes(
-                                            condition.dataType
-                                          ).map((type) => (
-                                            <SelectItem
-                                              key={type.value}
-                                              value={type.value}
-                                              className="text-white hover:bg-accent"
-                                            >
-                                              {type.label}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
+          {/* Lista de condiciones activas */}
+          <ActiveConditionsList
+            conditions={conditions}
+            onDeleteCondition={handleDeleteCondition}
+          />
 
-                                    <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Valor de Condición
-                                      </label>
-                                      {renderConditionInput(
-                                        condition,
-                                        globalIndex
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <div className="mt-2">
-                                    <label className="flex items-center">
-                                      <input
-                                        type="checkbox"
-                                        checked={condition.isRequired}
-                                        onChange={(e) =>
-                                          handleConditionChange(
-                                            globalIndex,
-                                            "isRequired",
-                                            e.target.checked
-                                          )
-                                        }
-                                        className="mr-2"
-                                      />
-                                      <span className="text-sm text-gray-900">
-                                        Requerido
-                                      </span>
-                                    </label>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Botones */}
-            <div className="flex justify-end space-x-3 pt-4">
-              <button
-                onClick={() => {
-                  setCurrentView("list");
-                  setEditingTable(null);
-                }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleUpdateConditions}
-                disabled={loading}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? "Actualizando..." : "Actualizar Condiciones"}
-              </button>
-            </div>
+          {/* Botones de acción */}
+          <div className="mt-8 flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setError(null);
+                setSuccess(null);
+                setCurrentView("list");
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() =>
+                updateTableConditions(selectedDatabase, selectedTable)
+              }
+              className="bg-green-600 hover:bg-green-700"
+            >
+              Guardar
+            </Button>
           </div>
         </div>
-      )}
-    </div>
-  );
+
+        {/* Modal para agregar condición */}
+        <AddConditionModal
+          isOpen={showAddConditionModal}
+          onClose={() => setShowAddConditionModal(false)}
+          onSave={handleAddCondition}
+          tableStructure={tableStructure}
+          existingConditions={conditions}
+        />
+      </div>
+    );
+  }
+
+  return null;
 };
 
 export default ActivatedTablesManager;

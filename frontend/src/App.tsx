@@ -900,22 +900,22 @@ function App() {
       const allTables: TableInfo[] = [];
       for (const db of dbList) {
         // Saltar la base de datos de la aplicación
-        if (db === APP_DATABASE) {
-          console.log(`Omitiendo base de datos de la aplicación: ${db}`);
+        if (db.name === APP_DATABASE) {
+          console.log(`Omitiendo base de datos de la aplicación: ${db.name}`);
           continue;
         }
 
         try {
-          const tablesResponse = await api.get(`/api/databases/${db}/tables`);
+          const tablesResponse = await api.get(`/api/databases/${db.name}/tables`);
           const dbTables = tablesResponse.data.map((table: any) => ({
             ...table,
-            database: db,
+            database: db.name,
           }));
           allTables.push(...dbTables);
         } catch (error: any) {
           // Solo loggear el error, no fallar completamente
           console.warn(
-            `No se pudieron cargar las tablas de ${db}: ${
+            `No se pudieron cargar las tablas de ${db.name}: ${
               error.response?.data?.error || error.message
             }`
           );
