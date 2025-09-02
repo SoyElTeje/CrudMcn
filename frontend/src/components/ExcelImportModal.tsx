@@ -423,7 +423,7 @@ export function ExcelImportModal({
                   <tbody>
                     {previewData.previewRows.map((row, rowIndex) => (
                       <tr key={rowIndex}>
-                        {previewData.headers.map((header, colIndex) => (
+                        {previewData.headers.map((_header, colIndex) => (
                           <td
                             key={colIndex}
                             className="border border-gray-300 px-3 py-2 text-sm text-black"
