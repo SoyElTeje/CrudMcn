@@ -165,13 +165,7 @@ function buildSelectQuery(tableName, filters, sort, limit, offset, request) {
   let query = `SELECT `;
 
   // Convertir fechas a string para evitar conversión automática a Date
-  query += `
-    *,
-    CASE 
-      WHEN FechaIngreso IS NOT NULL THEN CONVERT(VARCHAR(10), FechaIngreso, 120)
-      ELSE NULL 
-    END as FechaIngreso_String
-  FROM [${tableName}]`;
+  query += `* FROM [${tableName}]`;
 
   if (whereClause) {
     query += ` ${whereClause}`;

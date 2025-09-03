@@ -1,12 +1,9 @@
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
 const { getPool } = require("./db");
-const {
-  router: authRoutes,
-  authenticateToken,
-  requireAdmin,
-} = require("./routes/auth");
+const authRoutes = require("./routes/auth");
 
 const logsRoutes = require("./routes/logs");
 const activatedTablesRoutes = require("./routes/activatedTables");
@@ -18,13 +15,7 @@ const {
   isMMDDYYYYFormat,
 } = require("./utils/dateUtils");
 
-const {
-  requireReadPermission,
-  requireWritePermission,
-  requireDeletePermission,
-  requireCreatePermission,
-  requireTableListingPermission,
-} = require("./middleware/auth");
+const { authenticateToken, requireAdmin } = require("./middleware/auth");
 
 // Importar middleware de upload y servicio de Excel
 const upload = require("./middleware/upload");
@@ -45,6 +36,16 @@ app.use(
   })
 );
 app.use(express.json());
+// Servir archivos estáticos del frontend construido
+const frontendPath = path.resolve(__dirname, "..", "frontend", "dist");
+console.log("📁 Frontend path:", frontendPath);
+app.use(express.static(frontendPath));
+
+// Middleware para manejar rutas de la API
+app.use("/api", (req, res, next) => {
+  // Si la ruta empieza con /api, continuar con las rutas de la API
+  next();
+});
 
 // Rutas de autenticación (sin middleware de autenticación)
 app.use("/api/auth", authRoutes);
@@ -153,7 +154,7 @@ app.get("/api/databases", authenticateToken, async (req, res) => {
 app.get(
   "/api/databases/:dbName/tables",
   authenticateToken,
-  requireTableListingPermission,
+  requireAdmin,
   async (req, res) => {
     try {
       const dbName = req.params.dbName;
@@ -226,7 +227,7 @@ app.get(
 app.get(
   "/api/databases/:dbName/tables/:tableName/structure",
   authenticateToken,
-  requireReadPermission,
+  requireAdmin,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -311,7 +312,7 @@ app.get(
 app.get(
   "/api/databases/:dbName/tables/:tableName/records",
   authenticateToken,
-  requireReadPermission,
+  requireAdmin,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -421,8 +422,6 @@ app.get(
         return formattedRecord;
       });
 
-
-
       res.json({
         database: dbName,
         table: tableName,
@@ -443,7 +442,7 @@ app.get(
 app.get(
   "/api/databases/:dbName/tables/:tableName/count",
   authenticateToken,
-  requireReadPermission,
+  requireAdmin,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -488,7 +487,7 @@ app.get(
 app.post(
   "/api/databases/:dbName/tables/:tableName/records",
   authenticateToken,
-  requireCreatePermission,
+  requireAdmin,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -722,7 +721,7 @@ app.post(
 app.put(
   "/api/databases/:dbName/tables/:tableName/records",
   authenticateToken,
-  requireWritePermission,
+  requireAdmin,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -964,7 +963,7 @@ app.put(
 app.delete(
   "/api/databases/:dbName/tables/:tableName/records",
   authenticateToken,
-  requireDeletePermission,
+  requireAdmin,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -1056,7 +1055,7 @@ app.delete(
 app.delete(
   "/api/databases/:dbName/tables/:tableName/records/bulk",
   authenticateToken,
-  requireDeletePermission,
+  requireAdmin,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -1162,7 +1161,7 @@ app.delete(
 app.post(
   "/api/databases/:dbName/tables/:tableName/import-excel",
   authenticateToken,
-  requireWritePermission,
+  requireAdmin,
   upload.single("excelFile"),
   async (req, res) => {
     try {
@@ -1269,7 +1268,7 @@ app.get(
 app.get(
   "/api/databases/:dbName/tables/:tableName/download-template",
   authenticateToken,
-  requireReadPermission,
+  requireAdmin,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -1307,7 +1306,7 @@ app.get(
 app.post(
   "/api/databases/:dbName/tables/:tableName/preview-excel",
   authenticateToken,
-  requireReadPermission,
+  requireAdmin,
   upload.single("excelFile"),
   async (req, res) => {
     try {
@@ -1408,7 +1407,7 @@ app.post(
 app.get(
   "/api/databases/:dbName/tables/:tableName/export-excel",
   authenticateToken,
-  requireReadPermission,
+  requireAdmin,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -1509,6 +1508,10 @@ authService
   .catch((error) => {
     console.error("❌ Error inicializando usuario admin:", error);
   });
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "frontend", "dist", "index.html"));
+});
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);

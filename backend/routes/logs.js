@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const logService = require("../services/logService");
-const { authenticateToken, requireAdmin } = require("./auth");
+const { authenticateToken, requireAdmin } = require("../middleware/auth");
 
 // Obtener logs del usuario actual
 router.get("/my-logs", authenticateToken, async (req, res) => {

@@ -7,7 +7,7 @@ class AuthService {
   async verifyCredentials(username, password) {
     try {
       const pool = await getPool();
-      const query = "SELECT * FROM USERS_TABLE WHERE NombreUsuario = @username";
+      const query = "SELECT * FROM users WHERE username = @username";
       const result = await pool
         .request()
         .input("username", username)
@@ -18,34 +18,37 @@ class AuthService {
       }
 
       const user = result.recordset[0];
-      const isValidPassword = await bcrypt.compare(password, user.Contrasena);
+      const isValidPassword = await bcrypt.compare(
+        password,
+        user.password_hash
+      );
 
       if (!isValidPassword) {
         return null;
       }
 
-      // Verificar si la columna EsAdmin existe
+      // Verificar si la columna is_admin existe
       const checkColumnQuery = `
         SELECT COUNT(*) as count 
         FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_NAME = 'USERS_TABLE' 
-        AND COLUMN_NAME = 'EsAdmin'
+        WHERE TABLE_NAME = 'users' 
+        AND COLUMN_NAME = 'is_admin'
       `;
       const columnResult = await pool.request().query(checkColumnQuery);
 
       let isAdmin = false;
       if (columnResult.recordset[0].count === 0) {
         // Si la columna no existe, usar la lógica anterior
-        isAdmin = user.NombreUsuario === "admin";
+        isAdmin = user.username === "admin";
       } else {
         // Si la columna existe, usar la nueva lógica
         // En SQL Server, BIT se puede almacenar como 1/0 o true/false
-        isAdmin = user.EsAdmin === 1 || user.EsAdmin === true;
+        isAdmin = user.is_admin === 1 || user.is_admin === true;
       }
 
       return {
-        id: user.Id,
-        username: user.NombreUsuario,
+        id: user.id,
+        username: user.username,
         isAdmin: isAdmin,
         createdAt: null, // No tenemos esta columna
       };
@@ -83,7 +86,7 @@ class AuthService {
       const hashedPassword = await bcrypt.hash(password, 10);
       const pool = await getPool();
       const query =
-        "INSERT INTO USERS_TABLE (NombreUsuario, Contrasena, EsAdmin, FechaCreacion) VALUES (@username, @password, @isAdmin, GETDATE()); SELECT SCOPE_IDENTITY() AS id;";
+        "INSERT INTO users (username, password_hash, is_admin, created_at) VALUES (@username, @password, @isAdmin, GETDATE()); SELECT SCOPE_IDENTITY() AS id;";
       const result = await pool
         .request()
         .input("username", username)
@@ -108,39 +111,39 @@ class AuthService {
     try {
       const pool = await getPool();
 
-      // Verificar si la columna EsAdmin existe
+      // Verificar si la columna is_admin existe
       const checkColumnQuery = `
         SELECT COUNT(*) as count 
         FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_NAME = 'USERS_TABLE' 
-        AND COLUMN_NAME = 'EsAdmin'
+        WHERE TABLE_NAME = 'users' 
+        AND COLUMN_NAME = 'is_admin'
       `;
       const columnResult = await pool.request().query(checkColumnQuery);
 
       if (columnResult.recordset[0].count === 0) {
         // Si la columna no existe, usar la lógica anterior
         const query =
-          "SELECT Id, NombreUsuario, FechaCreacion FROM USERS_TABLE ORDER BY Id DESC";
+          "SELECT id, username, created_at FROM users ORDER BY id DESC";
         const result = await pool.request().query(query);
 
         return result.recordset.map((user) => ({
-          id: user.Id,
-          username: user.NombreUsuario,
-          isAdmin: user.NombreUsuario === "admin", // Por ahora, solo el usuario 'admin' es administrador
-          createdAt: user.FechaCreacion,
+          id: user.id,
+          username: user.username,
+          isAdmin: user.username === "admin", // Por ahora, solo el usuario 'admin' es administrador
+          createdAt: user.created_at,
           updatedAt: null, // No tenemos esta columna
         }));
       } else {
         // Si la columna existe, usar la nueva lógica
         const query =
-          "SELECT Id, NombreUsuario, EsAdmin, FechaCreacion FROM USERS_TABLE ORDER BY Id DESC";
+          "SELECT id, username, is_admin, created_at FROM users ORDER BY id DESC";
         const result = await pool.request().query(query);
 
         return result.recordset.map((user) => ({
-          id: user.Id,
-          username: user.NombreUsuario,
-          isAdmin: user.EsAdmin === 1 || user.EsAdmin === true,
-          createdAt: user.FechaCreacion,
+          id: user.id,
+          username: user.username,
+          isAdmin: user.is_admin === 1 || user.is_admin === true,
+          createdAt: user.created_at,
           updatedAt: null, // No tenemos esta columna
         }));
       }
@@ -156,7 +159,7 @@ class AuthService {
       const hashedPassword = await bcrypt.hash(newPassword, 10);
       const pool = await getPool();
       const query =
-        "UPDATE USERS_TABLE SET Contrasena = @password WHERE Id = @userId";
+        "UPDATE users SET password_hash = @password WHERE id = @userId";
       await pool
         .request()
         .input("password", hashedPassword)
@@ -175,19 +178,18 @@ class AuthService {
     try {
       const pool = await getPool();
 
-      // Verificar si la columna EsAdmin existe
+      // Verificar si la columna is_admin existe
       const checkColumnQuery = `
         SELECT COUNT(*) as count 
         FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_NAME = 'USERS_TABLE' 
-        AND COLUMN_NAME = 'EsAdmin'
+        WHERE TABLE_NAME = 'users' 
+        AND COLUMN_NAME = 'is_admin'
       `;
       const columnResult = await pool.request().query(checkColumnQuery);
 
       if (columnResult.recordset[0].count === 0) {
         // Si la columna no existe, usar la lógica anterior
-        const userQuery =
-          "SELECT NombreUsuario FROM USERS_TABLE WHERE Id = @userId";
+        const userQuery = "SELECT username FROM users WHERE id = @userId";
         const userResult = await pool
           .request()
           .input("userId", userId)
@@ -197,7 +199,7 @@ class AuthService {
           throw new Error("Usuario no encontrado");
         }
 
-        const username = userResult.recordset[0].NombreUsuario;
+        const username = userResult.recordset[0].username;
 
         // Solo permitir que el usuario 'admin' sea administrador
         if (isAdmin && username !== "admin") {
@@ -217,7 +219,7 @@ class AuthService {
       } else {
         // Si la columna existe, actualizar el estado de administrador
         const updateQuery =
-          "UPDATE USERS_TABLE SET EsAdmin = @isAdmin WHERE Id = @userId";
+          "UPDATE users SET is_admin = @isAdmin WHERE id = @userId";
         const result = await pool
           .request()
           .input("isAdmin", isAdmin ? 1 : 0)
@@ -240,7 +242,7 @@ class AuthService {
   async deleteUser(userId) {
     try {
       const pool = await getPool();
-      const query = "DELETE FROM USERS_TABLE WHERE Id = @userId";
+      const query = "DELETE FROM users WHERE id = @userId";
       const result = await pool.request().input("userId", userId).query(query);
 
       return result.rowsAffected[0] > 0;
@@ -256,30 +258,29 @@ class AuthService {
       // Verificar si el usuario es admin
       const pool = await getPool();
 
-      // Verificar si la columna EsAdmin existe
+      // Verificar si la columna is_admin existe
       const checkColumnQuery = `
         SELECT COUNT(*) as count 
         FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_NAME = 'USERS_TABLE' 
-        AND COLUMN_NAME = 'EsAdmin'
+        WHERE TABLE_NAME = 'users' 
+        AND COLUMN_NAME = 'is_admin'
       `;
       const columnResult = await pool.request().query(checkColumnQuery);
 
       let isAdmin = false;
       if (columnResult.recordset[0].count === 0) {
         // Si la columna no existe, usar la lógica anterior
-        const userQuery =
-          "SELECT NombreUsuario FROM USERS_TABLE WHERE Id = @userId";
+        const userQuery = "SELECT username FROM users WHERE id = @userId";
         const userResult = await pool
           .request()
           .input("userId", userId)
           .query(userQuery);
 
         if (userResult.recordset.length === 0) return false;
-        isAdmin = userResult.recordset[0].NombreUsuario === "admin";
+        isAdmin = userResult.recordset[0].username === "admin";
       } else {
         // Si la columna existe, usar la nueva lógica
-        const userQuery = "SELECT EsAdmin FROM USERS_TABLE WHERE Id = @userId";
+        const userQuery = "SELECT is_admin FROM users WHERE id = @userId";
         const userResult = await pool
           .request()
           .input("userId", userId)
@@ -287,8 +288,8 @@ class AuthService {
 
         if (userResult.recordset.length === 0) return false;
         isAdmin =
-          userResult.recordset[0].EsAdmin === 1 ||
-          userResult.recordset[0].EsAdmin === true;
+          userResult.recordset[0].is_admin === 1 ||
+          userResult.recordset[0].is_admin === true;
       }
 
       // Si el usuario es admin, tiene todos los permisos
@@ -329,30 +330,29 @@ class AuthService {
       // Verificar si el usuario es admin
       const pool = await getPool();
 
-      // Verificar si la columna EsAdmin existe
+      // Verificar si la columna is_admin existe
       const checkColumnQuery = `
         SELECT COUNT(*) as count 
         FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_NAME = 'USERS_TABLE' 
-        AND COLUMN_NAME = 'EsAdmin'
+        WHERE TABLE_NAME = 'users' 
+        AND COLUMN_NAME = 'is_admin'
       `;
       const columnResult = await pool.request().query(checkColumnQuery);
 
       let isAdmin = false;
       if (columnResult.recordset[0].count === 0) {
         // Si la columna no existe, usar la lógica anterior
-        const userQuery =
-          "SELECT NombreUsuario FROM USERS_TABLE WHERE Id = @userId";
+        const userQuery = "SELECT username FROM users WHERE id = @userId";
         const userResult = await pool
           .request()
           .input("userId", userId)
           .query(userQuery);
 
         if (userResult.recordset.length === 0) return false;
-        isAdmin = userResult.recordset[0].NombreUsuario === "admin";
+        isAdmin = userResult.recordset[0].username === "admin";
       } else {
         // Si la columna existe, usar la nueva lógica
-        const userQuery = "SELECT EsAdmin FROM USERS_TABLE WHERE Id = @userId";
+        const userQuery = "SELECT is_admin FROM users WHERE id = @userId";
         const userResult = await pool
           .request()
           .input("userId", userId)
@@ -360,8 +360,8 @@ class AuthService {
 
         if (userResult.recordset.length === 0) return false;
         isAdmin =
-          userResult.recordset[0].EsAdmin === 1 ||
-          userResult.recordset[0].EsAdmin === true;
+          userResult.recordset[0].is_admin === 1 ||
+          userResult.recordset[0].is_admin === true;
       }
 
       // Si el usuario es admin, puede listar todas las tablas
@@ -397,30 +397,29 @@ class AuthService {
       // Verificar si el usuario es admin
       const pool = await getPool();
 
-      // Verificar si la columna EsAdmin existe
+      // Verificar si la columna is_admin existe
       const checkColumnQuery = `
         SELECT COUNT(*) as count 
         FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_NAME = 'USERS_TABLE' 
-        AND COLUMN_NAME = 'EsAdmin'
+        WHERE TABLE_NAME = 'users' 
+        AND COLUMN_NAME = 'is_admin'
       `;
       const columnResult = await pool.request().query(checkColumnQuery);
 
       let isAdmin = false;
       if (columnResult.recordset[0].count === 0) {
         // Si la columna no existe, usar la lógica anterior
-        const userQuery =
-          "SELECT NombreUsuario FROM USERS_TABLE WHERE Id = @userId";
+        const userQuery = "SELECT username FROM users WHERE id = @userId";
         const userResult = await pool
           .request()
           .input("userId", userId)
           .query(userQuery);
 
         if (userResult.recordset.length === 0) return false;
-        isAdmin = userResult.recordset[0].NombreUsuario === "admin";
+        isAdmin = userResult.recordset[0].username === "admin";
       } else {
         // Si la columna existe, usar la nueva lógica
-        const userQuery = "SELECT EsAdmin FROM USERS_TABLE WHERE Id = @userId";
+        const userQuery = "SELECT is_admin FROM users WHERE id = @userId";
         const userResult = await pool
           .request()
           .input("userId", userId)
@@ -428,8 +427,8 @@ class AuthService {
 
         if (userResult.recordset.length === 0) return false;
         isAdmin =
-          userResult.recordset[0].EsAdmin === 1 ||
-          userResult.recordset[0].EsAdmin === true;
+          userResult.recordset[0].is_admin === 1 ||
+          userResult.recordset[0].is_admin === true;
       }
 
       // Si el usuario es admin, tiene todos los permisos
@@ -473,13 +472,15 @@ class AuthService {
   }
 
   // Función para crear usuario de SQL Server con permisos granulares
+  // COMENTADA TEMPORALMENTE - Causa errores de permisos
+  /*
   async createSQLServerUser(userId, databaseName, tableName, permissions) {
     try {
       const pool = await getPool();
 
       // Obtener información del usuario
       const userQuery =
-        "SELECT NombreUsuario FROM USERS_TABLE WHERE Id = @userId";
+        "SELECT username FROM users WHERE id = @userId";
       const userResult = await pool
         .request()
         .input("userId", userId)
@@ -489,7 +490,7 @@ class AuthService {
         throw new Error("Usuario no encontrado");
       }
 
-      const username = userResult.recordset[0].NombreUsuario;
+      const username = userResult.recordset[0].username;
       const sqlUsername = `user_${userId}_${databaseName.replace(
         /[^a-zA-Z0-9]/g,
         "_"
@@ -574,6 +575,7 @@ class AuthService {
       throw error;
     }
   }
+  */
 
   // Función para asignar permisos de tabla específica a un usuario
   async assignTablePermission(userId, databaseName, tableName, permissions) {
@@ -586,6 +588,24 @@ class AuthService {
       } = permissions;
 
       const pool = await getPool();
+
+      // Verificar si la tabla USER_TABLE_PERMISSIONS existe
+      const tableExistsQuery = `
+        SELECT COUNT(*) as count 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_NAME = 'USER_TABLE_PERMISSIONS'
+      `;
+
+      const tableExistsResult = await pool.request().query(tableExistsQuery);
+      const tableExists = tableExistsResult.recordset[0].count > 0;
+
+      if (!tableExists) {
+        console.log(
+          "⚠️ Tabla USER_TABLE_PERMISSIONS no existe, no se puede asignar permiso"
+        );
+        return false;
+      }
+
       const query = `
         MERGE USER_TABLE_PERMISSIONS AS target
         USING (SELECT @userId AS UserId, @databaseName AS DatabaseName, @tableName AS TableName) AS source
@@ -612,18 +632,18 @@ class AuthService {
         .input("canCreate", canCreate ? 1 : 0)
         .query(query);
 
-      // Crear usuario de SQL Server con permisos granulares
-      await this.createSQLServerUser(
-        userId,
-        databaseName,
-        tableName,
-        permissions
-      );
+      // Comentado temporalmente: Crear usuario de SQL Server con permisos granulares
+      // await this.createSQLServerUser(
+      //   userId,
+      //   databaseName,
+      //   tableName,
+      //   permissions
+      // );
 
       return true;
     } catch (error) {
       console.error("Error assigning table permission:", error);
-      throw error;
+      return false;
     }
   }
 
@@ -637,6 +657,24 @@ class AuthService {
       } = permissions;
 
       const pool = await getPool();
+
+      // Verificar si la tabla USER_DATABASE_PERMISSIONS existe
+      const tableExistsQuery = `
+        SELECT COUNT(*) as count 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_NAME = 'USER_DATABASE_PERMISSIONS'
+      `;
+
+      const tableExistsResult = await pool.request().query(tableExistsQuery);
+      const tableExists = tableExistsResult.recordset[0].count > 0;
+
+      if (!tableExists) {
+        console.log(
+          "⚠️ Tabla USER_DATABASE_PERMISSIONS no existe, no se puede asignar permiso"
+        );
+        return false;
+      }
+
       const query = `
         MERGE USER_DATABASE_PERMISSIONS AS target
         USING (SELECT @userId AS UserId, @databaseName AS DatabaseName) AS source
@@ -663,7 +701,7 @@ class AuthService {
       return true;
     } catch (error) {
       console.error("Error assigning database permission:", error);
-      throw error;
+      return false;
     }
   }
 
@@ -671,6 +709,24 @@ class AuthService {
   async removeDatabasePermission(userId, databaseName) {
     try {
       const pool = await getPool();
+
+      // Verificar si la tabla USER_DATABASE_PERMISSIONS existe
+      const tableExistsQuery = `
+        SELECT COUNT(*) as count 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_NAME = 'USER_DATABASE_PERMISSIONS'
+      `;
+
+      const tableExistsResult = await pool.request().query(tableExistsQuery);
+      const tableExists = tableExistsResult.recordset[0].count > 0;
+
+      if (!tableExists) {
+        console.log(
+          "⚠️ Tabla USER_DATABASE_PERMISSIONS no existe, no se puede eliminar permiso"
+        );
+        return false;
+      }
+
       const query = `
         DELETE FROM USER_DATABASE_PERMISSIONS 
         WHERE UserId = @userId AND DatabaseName = @databaseName
@@ -685,7 +741,7 @@ class AuthService {
       return true;
     } catch (error) {
       console.error("Error removing database permission:", error);
-      throw error;
+      return false;
     }
   }
 
@@ -693,6 +749,24 @@ class AuthService {
   async removeTablePermission(userId, databaseName, tableName) {
     try {
       const pool = await getPool();
+
+      // Verificar si la tabla USER_TABLE_PERMISSIONS existe
+      const tableExistsQuery = `
+        SELECT COUNT(*) as count 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_NAME = 'USER_TABLE_PERMISSIONS'
+      `;
+
+      const tableExistsResult = await pool.request().query(tableExistsQuery);
+      const tableExists = tableExistsResult.recordset[0].count > 0;
+
+      if (!tableExists) {
+        console.log(
+          "⚠️ Tabla USER_TABLE_PERMISSIONS no existe, no se puede eliminar permiso"
+        );
+        return false;
+      }
+
       const query = `
         DELETE FROM USER_TABLE_PERMISSIONS 
         WHERE UserId = @userId AND DatabaseName = @databaseName AND TableName = @tableName
@@ -706,6 +780,8 @@ class AuthService {
         .query(query);
 
       // También eliminar el usuario de SQL Server si existe
+      // COMENTADO TEMPORALMENTE - Causa errores de permisos
+      /*
       try {
         const sqlUserName = `user_${userId}_${databaseName}_${tableName}`;
         const dbPool = await getPool(databaseName);
@@ -726,11 +802,12 @@ class AuthService {
         );
         // No lanzar error aquí ya que el permiso ya se eliminó de la tabla de control
       }
+      */
 
       return true;
     } catch (error) {
       console.error("Error removing table permission:", error);
-      throw error;
+      return false;
     }
   }
 
@@ -738,20 +815,43 @@ class AuthService {
   async getUserPermissions(userId) {
     try {
       const pool = await getPool();
+
+      // Verificar si la tabla de permisos existe
+      const tableExistsQuery = `
+        SELECT COUNT(*) as count 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_NAME = 'user_permissions'
+      `;
+
+      const tableExistsResult = await pool.request().query(tableExistsQuery);
+      const tableExists = tableExistsResult.recordset[0].count === 1;
+
+      if (!tableExists) {
+        console.log(
+          "⚠️ Tabla de permisos no existe, retornando permisos vacíos"
+        );
+        return {
+          databasePermissions: [],
+          tablePermissions: [],
+        };
+      }
+
+      // Obtener permisos de base de datos (donde table_name es NULL)
       const databasePermissionsQuery = `
-        SELECT DatabaseName, CanRead, CanWrite, CanDelete 
-        FROM USER_DATABASE_PERMISSIONS 
-        WHERE UserId = @userId
+        SELECT database_name as databaseName, can_read as canRead, can_write as canWrite, can_delete as canDelete
+        FROM user_permissions 
+        WHERE user_id = @userId AND table_name IS NULL
       `;
       const databasePermissionsResult = await pool
         .request()
         .input("userId", userId)
         .query(databasePermissionsQuery);
 
+      // Obtener permisos de tablas específicas
       const tablePermissionsQuery = `
-        SELECT DatabaseName, TableName, CanRead, CanWrite, CanDelete, CanCreate
-        FROM USER_TABLE_PERMISSIONS 
-        WHERE UserId = @userId
+        SELECT database_name as databaseName, table_name as tableName, can_read as canRead, can_write as canWrite, can_delete as canDelete, can_create as canCreate
+        FROM user_permissions 
+        WHERE user_id = @userId AND table_name IS NOT NULL
       `;
       const tablePermissionsResult = await pool
         .request()
@@ -760,23 +860,27 @@ class AuthService {
 
       return {
         databasePermissions: databasePermissionsResult.recordset.map((p) => ({
-          databaseName: p.DatabaseName,
-          canRead: p.CanRead === 1 || p.CanRead === true,
-          canWrite: p.CanWrite === 1 || p.CanWrite === true,
-          canDelete: p.CanDelete === 1 || p.CanDelete === true,
+          databaseName: p.databaseName,
+          canRead: p.canRead === 1 || p.canRead === true,
+          canWrite: p.canWrite === 1 || p.canWrite === true,
+          canDelete: p.canDelete === 1 || p.canDelete === true,
         })),
         tablePermissions: tablePermissionsResult.recordset.map((p) => ({
-          databaseName: p.DatabaseName,
-          tableName: p.TableName,
-          canRead: p.CanRead === 1 || p.CanRead === true,
-          canWrite: p.CanWrite === 1 || p.CanWrite === true,
-          canDelete: p.CanDelete === 1 || p.CanDelete === true,
-          canCreate: p.CanCreate === 1 || p.CanCreate === true,
+          databaseName: p.databaseName,
+          tableName: p.tableName,
+          canRead: p.canRead === 1 || p.canRead === true,
+          canWrite: p.canWrite === 1 || p.canWrite === true,
+          canDelete: p.canDelete === 1 || p.canDelete === true,
+          canCreate: p.canCreate === 1 || p.canCreate === true,
         })),
       };
     } catch (error) {
       console.error("Error getting user permissions:", error);
-      throw error;
+      // Si hay error, retornar permisos vacíos en lugar de fallar
+      return {
+        databasePermissions: [],
+        tablePermissions: [],
+      };
     }
   }
 
@@ -784,7 +888,7 @@ class AuthService {
   async createDefaultAdmin() {
     try {
       const pool = await getPool();
-      const query = "SELECT * FROM USERS_TABLE WHERE NombreUsuario = @username";
+      const query = "SELECT * FROM users WHERE username = @username";
       const result = await pool
         .request()
         .input("username", "admin")
@@ -793,7 +897,7 @@ class AuthService {
       if (result.recordset.length === 0) {
         const hashedPassword = await bcrypt.hash("admin", 10);
         const insertQuery =
-          "INSERT INTO USERS_TABLE (NombreUsuario, Contrasena, EsAdmin) VALUES (@username, @password, 1)";
+          "INSERT INTO users (username, password_hash, is_admin) VALUES (@username, @password, 1)";
         await pool
           .request()
           .input("username", "admin")

@@ -7,22 +7,22 @@ const {
 
 class ActivatedTablesService {
   /**
-   * Obtiene todas las bases de datos disponibles (excluyendo APPDATA)
+   * Obtiene todas las bases de datos disponibles (solo las permitidas)
    */
   async getAllDatabases() {
     try {
-      const pool = await getPool();
+      // Importar configuración de bases de datos permitidas
+      const { getAllowedDatabases } = require("../config/allowedDatabases");
 
-      const query = `
-        SELECT name as DatabaseName
-        FROM sys.databases 
-        WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb', 'APPDATA')
-        AND state = 0 -- Online databases only
-        ORDER BY name
-      `;
+      // Obtener solo las bases de datos permitidas
+      const allowedDatabases = getAllowedDatabases();
 
-      const result = await pool.request().query(query);
-      return result.recordset;
+      // Convertir a formato esperado
+      const databases = allowedDatabases.map((dbName) => ({
+        DatabaseName: dbName,
+      }));
+
+      return databases;
     } catch (error) {
       console.error("Error obteniendo bases de datos:", error);
       throw error;
@@ -54,13 +54,22 @@ class ActivatedTablesService {
   }
 
   /**
-   * Obtiene todas las tablas disponibles (activas e inactivas)
+   * Obtiene todas las tablas disponibles (solo de bases de datos permitidas)
    */
   async getAllTables() {
     try {
       const pool = await getPool();
 
-      // Obtener todas las tablas de todas las bases de datos excepto APPDATA
+      // Importar configuración de bases de datos permitidas
+      const { getAllowedDatabases } = require("../config/allowedDatabases");
+      const allowedDatabases = getAllowedDatabases();
+
+      // Construir la lista de bases de datos permitidas para la consulta SQL
+      const allowedDatabasesList = allowedDatabases
+        .map((db) => `'${db}'`)
+        .join(",");
+
+      // Obtener todas las tablas de las bases de datos permitidas
       const query = `
         SELECT 
           TABLE_CATALOG as DatabaseName,
@@ -68,7 +77,7 @@ class ActivatedTablesService {
           TABLE_SCHEMA as SchemaName
         FROM INFORMATION_SCHEMA.TABLES 
         WHERE TABLE_TYPE = 'BASE TABLE'
-        AND TABLE_CATALOG NOT IN ('master', 'tempdb', 'model', 'msdb', 'APPDATA')
+        AND TABLE_CATALOG IN (${allowedDatabasesList})
         ORDER BY TABLE_CATALOG, TABLE_NAME
       `;
 
@@ -87,51 +96,22 @@ class ActivatedTablesService {
     try {
       const pool = await getPool();
 
-      // Primero verificar si la tabla USERS existe
-      const usersTableExists = await pool.request().query(`
-        SELECT COUNT(*) as count 
-        FROM INFORMATION_SCHEMA.TABLES 
-        WHERE TABLE_NAME = 'USERS'
-      `);
-
-      let query;
-      if (usersTableExists.recordset[0].count > 0) {
-        // Si la tabla USERS existe, usar JOIN
-        query = `
-          SELECT 
-            at.Id,
-            at.DatabaseName,
-            at.TableName,
-            at.IsActive,
-            at.Description,
-            at.CreatedAt,
-            at.UpdatedAt,
-            u.Username as CreatedByUsername,
-            u2.Username as UpdatedByUsername
-          FROM ACTIVATED_TABLES at
-          LEFT JOIN USERS u ON at.CreatedBy = u.Id
-          LEFT JOIN USERS u2 ON at.UpdatedBy = u2.Id
-          WHERE at.IsActive = 1
-          ORDER BY at.DatabaseName, at.TableName
-        `;
-      } else {
-        // Si la tabla USERS no existe, usar consulta simple
-        query = `
-          SELECT 
-            at.Id,
-            at.DatabaseName,
-            at.TableName,
-            at.IsActive,
-            at.Description,
-            at.CreatedAt,
-            at.UpdatedAt,
-            'Admin' as CreatedByUsername,
-            'Admin' as UpdatedByUsername
-          FROM ACTIVATED_TABLES at
-          WHERE at.IsActive = 1
-          ORDER BY at.DatabaseName, at.TableName
-        `;
-      }
+      // Siempre usar consulta simple para evitar problemas con JOINs
+      const query = `
+        SELECT 
+          at.Id,
+          at.DatabaseName,
+          at.TableName,
+          at.Description,
+          at.IsActive,
+          at.CreatedAt,
+          at.CreatedBy,
+          u.Username as CreatedByUsername
+        FROM ActivatedTables at
+        LEFT JOIN Users u ON at.CreatedBy = u.Id
+        WHERE at.IsActive = 1
+        ORDER BY at.DatabaseName, at.TableName
+      `;
 
       const result = await pool.request().query(query);
       return result.recordset;
@@ -153,9 +133,10 @@ class ActivatedTablesService {
           COLUMN_NAME as ColumnName,
           DATA_TYPE as DataType,
           IS_NULLABLE as IsNullable,
-          CHARACTER_MAXIMUM_LENGTH as MaxLength,
           COLUMN_DEFAULT as DefaultValue,
-          ORDINAL_POSITION as Position
+          CHARACTER_MAXIMUM_LENGTH as MaxLength,
+          NUMERIC_PRECISION as NumericPrecision,
+          NUMERIC_SCALE as NumericScale
         FROM INFORMATION_SCHEMA.COLUMNS 
         WHERE TABLE_NAME = @tableName
         ORDER BY ORDINAL_POSITION
@@ -174,81 +155,56 @@ class ActivatedTablesService {
   }
 
   /**
-   * Verifica si una tabla está activada
-   */
-  async isTableActivated(databaseName, tableName) {
-    try {
-      const pool = await getPool();
-
-      const query = `
-        SELECT Id, IsActive 
-        FROM ACTIVATED_TABLES 
-        WHERE DatabaseName = @databaseName AND TableName = @tableName
-      `;
-
-      const result = await pool
-        .request()
-        .input("databaseName", databaseName)
-        .input("tableName", tableName)
-        .query(query);
-
-      return result.recordset.length > 0 && result.recordset[0].IsActive;
-    } catch (error) {
-      console.error("Error verificando si tabla está activada:", error);
-      throw error;
-    }
-  }
-
-  /**
    * Activa una tabla
    */
   async activateTable(databaseName, tableName, description, userId) {
     try {
       const pool = await getPool();
 
-      // Verificar si ya existe y está activa
-      const existing = await pool
+      // Verificar si la tabla ya está activada
+      const checkQuery = `
+        SELECT Id FROM ActivatedTables 
+        WHERE DatabaseName = @databaseName AND TableName = @tableName
+      `;
+
+      const checkResult = await pool
         .request()
         .input("databaseName", databaseName)
-        .input("tableName", tableName).query(`
-          SELECT Id, IsActive FROM ACTIVATED_TABLES 
+        .input("tableName", tableName)
+        .query(checkQuery);
+
+      if (checkResult.recordset.length > 0) {
+        // Si ya existe, actualizar
+        const updateQuery = `
+          UPDATE ActivatedTables 
+          SET Description = @description, IsActive = 1, UpdatedAt = GETDATE()
           WHERE DatabaseName = @databaseName AND TableName = @tableName
-        `);
+        `;
 
-      if (existing.recordset.length > 0) {
-        if (existing.recordset[0].IsActive) {
-          throw new Error(
-            `La tabla ${databaseName}.${tableName} ya está activada`
-          );
-        } else {
-          // Reactivar tabla existente
-          await pool
-            .request()
-            .input("databaseName", databaseName)
-            .input("tableName", tableName)
-            .input("description", description)
-            .input("userId", userId).query(`
-              UPDATE ACTIVATED_TABLES 
-              SET IsActive = 1, Description = @description, UpdatedAt = GETDATE(), UpdatedBy = @userId
-              WHERE DatabaseName = @databaseName AND TableName = @tableName
-            `);
-
-          return existing.recordset[0].Id;
-        }
-      } else {
-        // Insertar nueva tabla activada
-        const result = await pool
+        await pool
           .request()
           .input("databaseName", databaseName)
           .input("tableName", tableName)
           .input("description", description)
-          .input("userId", userId).query(`
-            INSERT INTO ACTIVATED_TABLES (DatabaseName, TableName, Description, CreatedBy, UpdatedBy)
-            OUTPUT INSERTED.Id
-            VALUES (@databaseName, @tableName, @description, @userId, @userId)
-          `);
+          .query(updateQuery);
 
-        return result.recordset[0].Id;
+        return checkResult.recordset[0].Id;
+      } else {
+        // Si no existe, crear nueva
+        const insertQuery = `
+          INSERT INTO ActivatedTables (DatabaseName, TableName, Description, IsActive, CreatedAt, CreatedBy)
+          VALUES (@databaseName, @tableName, @description, 1, GETDATE(), @userId)
+        `;
+
+        const insertResult = await pool
+          .request()
+          .input("databaseName", databaseName)
+          .input("tableName", tableName)
+          .input("description", description)
+          .input("userId", userId)
+          .query(insertQuery + "; SELECT SCOPE_IDENTITY() as Id");
+
+        return insertResult.recordset[0].Id;
       }
     } catch (error) {
       console.error("Error activando tabla:", error);
@@ -259,19 +215,21 @@ class ActivatedTablesService {
   /**
    * Desactiva una tabla
    */
-  async deactivateTable(databaseName, tableName, userId) {
+  async deactivateTable(databaseName, tableName) {
     try {
       const pool = await getPool();
+
+      const query = `
+        UPDATE ActivatedTables 
+        SET IsActive = 0, UpdatedAt = GETDATE()
+        WHERE DatabaseName = @databaseName AND TableName = @tableName
+      `;
 
       await pool
         .request()
         .input("databaseName", databaseName)
         .input("tableName", tableName)
-        .input("userId", userId).query(`
-          UPDATE ACTIVATED_TABLES 
-          SET IsActive = 0, UpdatedAt = GETDATE(), UpdatedBy = @userId
-          WHERE DatabaseName = @databaseName AND TableName = @tableName
-        `);
+        .query(query);
 
       return true;
     } catch (error) {
@@ -281,7 +239,7 @@ class ActivatedTablesService {
   }
 
   /**
-   * Obtiene las condiciones de una tabla
+   * Obtiene las condiciones de una tabla por ID
    */
   async getTableConditions(activatedTableId) {
     try {
@@ -291,20 +249,14 @@ class ActivatedTablesService {
         SELECT 
           tc.Id,
           tc.ColumnName,
-          tc.DataType,
           tc.ConditionType,
           tc.ConditionValue,
           tc.IsRequired,
-          tc.IsActive,
           tc.CreatedAt,
-          tc.UpdatedAt,
-          u.Username as CreatedByUsername,
-          u2.Username as UpdatedByUsername
-        FROM TABLE_CONDITIONS tc
-        LEFT JOIN USERS u ON tc.CreatedBy = u.Id
-        LEFT JOIN USERS u2 ON tc.UpdatedBy = u2.Id
+          tc.CreatedBy
+        FROM TableConditions tc
         WHERE tc.ActivatedTableId = @activatedTableId
-        ORDER BY tc.ColumnName, tc.ConditionType
+        ORDER BY tc.ColumnName
       `;
 
       const result = await pool
@@ -330,21 +282,17 @@ class ActivatedTablesService {
         SELECT 
           tc.Id,
           tc.ColumnName,
-          tc.DataType,
           tc.ConditionType,
           tc.ConditionValue,
           tc.IsRequired,
-          tc.IsActive,
           tc.CreatedAt,
-          tc.UpdatedAt,
-          'Admin' as CreatedByUsername,
-          'Admin' as UpdatedByUsername
-        FROM TABLE_CONDITIONS tc
-        JOIN ACTIVATED_TABLES at ON tc.ActivatedTableId = at.Id
+          tc.CreatedBy
+        FROM TableConditions tc
+        INNER JOIN ActivatedTables at ON tc.ActivatedTableId = at.Id
         WHERE at.DatabaseName = @databaseName 
-        AND at.TableName = @tableName 
+        AND at.TableName = @tableName
         AND at.IsActive = 1
-        ORDER BY tc.ColumnName, tc.ConditionType
+        ORDER BY tc.ColumnName
       `;
 
       const result = await pool
@@ -361,70 +309,6 @@ class ActivatedTablesService {
   }
 
   /**
-   * Actualiza las condiciones de una tabla activada
-   */
-  async updateTableConditions(databaseName, tableName, conditions, userId) {
-    try {
-      const pool = await getPool();
-
-      // Obtener el ID de la tabla activada
-      const tableQuery = `
-        SELECT Id FROM ACTIVATED_TABLES 
-        WHERE DatabaseName = @databaseName 
-        AND TableName = @tableName 
-        AND IsActive = 1
-      `;
-
-      const tableResult = await pool
-        .request()
-        .input("databaseName", databaseName)
-        .input("tableName", tableName)
-        .query(tableQuery);
-
-      if (tableResult.recordset.length === 0) {
-        throw new Error(
-          `La tabla ${databaseName}.${tableName} no está activada`
-        );
-      }
-
-      const activatedTableId = tableResult.recordset[0].Id;
-
-      // Eliminar condiciones existentes
-      await pool.request().input("activatedTableId", activatedTableId).query(`
-          DELETE FROM TABLE_CONDITIONS 
-          WHERE ActivatedTableId = @activatedTableId
-        `);
-
-      // Insertar nuevas condiciones
-      for (const condition of conditions) {
-        await pool
-          .request()
-          .input("activatedTableId", activatedTableId)
-          .input("columnName", condition.columnName)
-          .input("dataType", condition.dataType)
-          .input("conditionType", condition.conditionType)
-          .input("conditionValue", condition.conditionValue)
-          .input("isRequired", condition.isRequired)
-          .input("userId", userId).query(`
-            INSERT INTO TABLE_CONDITIONS (
-              ActivatedTableId, ColumnName, DataType, ConditionType, 
-              ConditionValue, IsRequired, CreatedBy, UpdatedBy
-            )
-            VALUES (
-              @activatedTableId, @columnName, @dataType, @conditionType,
-              @conditionValue, @isRequired, @userId, @userId
-            )
-          `);
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Error actualizando condiciones de tabla:", error);
-      throw error;
-    }
-  }
-
-  /**
    * Guarda las condiciones de una tabla
    */
   async saveTableConditions(activatedTableId, conditions, userId) {
@@ -432,31 +316,38 @@ class ActivatedTablesService {
       const pool = await getPool();
 
       // Eliminar condiciones existentes
-      await pool.request().input("activatedTableId", activatedTableId).query(`
-          DELETE FROM TABLE_CONDITIONS 
-          WHERE ActivatedTableId = @activatedTableId
-        `);
+      const deleteQuery = `
+        DELETE FROM TableConditions 
+        WHERE ActivatedTableId = @activatedTableId
+      `;
+
+      await pool
+        .request()
+        .input("activatedTableId", activatedTableId)
+        .query(deleteQuery);
 
       // Insertar nuevas condiciones
       for (const condition of conditions) {
+        const insertQuery = `
+          INSERT INTO TableConditions (
+            ActivatedTableId, ColumnName, ConditionType, 
+            ConditionValue, IsRequired, CreatedAt, CreatedBy
+          )
+          VALUES (
+            @activatedTableId, @columnName, @conditionType,
+            @conditionValue, @isRequired, GETDATE(), @userId
+          )
+        `;
+
         await pool
           .request()
           .input("activatedTableId", activatedTableId)
           .input("columnName", condition.columnName)
-          .input("dataType", condition.dataType)
           .input("conditionType", condition.conditionType)
-          .input("conditionValue", condition.conditionValue)
-          .input("isRequired", condition.isRequired)
-          .input("userId", userId).query(`
-            INSERT INTO TABLE_CONDITIONS (
-              ActivatedTableId, ColumnName, DataType, ConditionType, 
-              ConditionValue, IsRequired, CreatedBy, UpdatedBy
-            )
-            VALUES (
-              @activatedTableId, @columnName, @dataType, @conditionType,
-              @conditionValue, @isRequired, @userId, @userId
-            )
-          `);
+          .input("conditionValue", JSON.stringify(condition.conditionValue))
+          .input("isRequired", condition.isRequired || false)
+          .input("userId", userId)
+          .query(insertQuery);
       }
 
       return true;
@@ -467,97 +358,156 @@ class ActivatedTablesService {
   }
 
   /**
-   * Valida datos según las condiciones de la tabla
+   * Actualiza las condiciones de una tabla
    */
-  async validateTableData(databaseName, tableName, data) {
+  async updateTableConditions(
+    databaseName,
+    tableName,
+    conditions,
+    description,
+    userId
+  ) {
     try {
       const pool = await getPool();
 
-      // Obtener las condiciones de la tabla
-      const conditionsQuery = `
-        SELECT tc.*
-        FROM TABLE_CONDITIONS tc
-        JOIN ACTIVATED_TABLES at ON tc.ActivatedTableId = at.Id
-        WHERE at.DatabaseName = @databaseName 
-        AND at.TableName = @tableName 
-        AND tc.IsActive = 1
-        AND at.IsActive = 1
+      // Obtener el ID de la tabla activada
+      const tableQuery = `
+        SELECT Id FROM ActivatedTables 
+        WHERE DatabaseName = @databaseName AND TableName = @tableName
       `;
 
-      const conditionsResult = await pool
+      const tableResult = await pool
         .request()
         .input("databaseName", databaseName)
         .input("tableName", tableName)
-        .query(conditionsQuery);
+        .query(tableQuery);
 
-      const conditions = conditionsResult.recordset;
-      const errors = [];
+      if (tableResult.recordset.length === 0) {
+        throw new Error("Tabla no encontrada");
+      }
 
-      // Obtener información de la estructura de la tabla para identificar campos identity
-      const structureQuery = `
-        SELECT 
-          COLUMN_NAME,
-          COLUMNPROPERTY(object_id(@tableName), COLUMN_NAME, 'IsIdentity') as IS_IDENTITY
-        FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_NAME = @tableName
+      const activatedTableId = tableResult.recordset[0].Id;
+
+      // Actualizar descripción
+      if (description) {
+        const updateDescQuery = `
+          UPDATE ActivatedTables 
+          SET Description = @description, UpdatedAt = GETDATE()
+          WHERE Id = @activatedTableId
+        `;
+
+        await pool
+          .request()
+          .input("description", description)
+          .input("activatedTableId", activatedTableId)
+          .query(updateDescQuery);
+      }
+
+      // Guardar condiciones
+      if (conditions && conditions.length > 0) {
+        await this.saveTableConditions(activatedTableId, conditions, userId);
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error actualizando condiciones de tabla:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verifica si una tabla está activada
+   */
+  async isTableActivated(databaseName, tableName) {
+    try {
+      const pool = await getPool();
+
+      const query = `
+        SELECT Id FROM ActivatedTables 
+        WHERE DatabaseName = @databaseName 
+        AND TableName = @tableName 
+        AND IsActive = 1
       `;
 
-      const structureResult = await pool
+      const result = await pool
         .request()
+        .input("databaseName", databaseName)
         .input("tableName", tableName)
-        .query(structureQuery);
+        .query(query);
 
-      const identityColumns = structureResult.recordset
-        .filter((col) => col.IS_IDENTITY)
-        .map((col) => col.COLUMN_NAME);
+      return result.recordset.length > 0;
+    } catch (error) {
+      console.error("Error verificando si tabla está activada:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Valida los datos de una tabla según las condiciones configuradas
+   */
+  async validateTableData(databaseName, tableName, data) {
+    try {
+      // Obtener las condiciones de la tabla
+      const conditions = await this.getTableConditionsByDatabaseAndTable(
+        databaseName,
+        tableName
+      );
+
+      if (conditions.length === 0) {
+        return { isValid: true, errors: [] };
+      }
+
+      const errors = [];
 
       // Validar cada campo según sus condiciones
       for (const condition of conditions) {
-        // Saltar validación para campos identity (auto-increment)
-        if (identityColumns.includes(condition.ColumnName)) {
-          continue;
-        }
-
         const fieldValue = data[condition.ColumnName];
 
         // Validar campo requerido
         if (
           condition.IsRequired &&
-          (fieldValue === null || fieldValue === undefined || fieldValue === "")
+          (fieldValue === undefined || fieldValue === null || fieldValue === "")
         ) {
-          errors.push(`El campo '${condition.ColumnName}' es obligatorio`);
+          errors.push(`El campo '${condition.ColumnName}' es requerido`);
           continue;
         }
 
-        // Si el campo está vacío y no es requerido, continuar
+        // Si el campo no tiene valor y no es requerido, continuar
         if (
-          fieldValue === null ||
           fieldValue === undefined ||
+          fieldValue === null ||
           fieldValue === ""
         ) {
           continue;
         }
 
-        // Validar según el tipo de dato
-        switch (condition.DataType.toLowerCase()) {
-          case "string":
-            errors.push(...this.validateStringField(condition, fieldValue));
-            break;
-          case "numeric":
-            errors.push(...this.validateNumericField(condition, fieldValue));
-            break;
+        // Validar según el tipo de condición
+        switch (condition.ConditionType) {
           case "date":
-            errors.push(...this.validateDateField(condition, fieldValue));
+            const dateErrors = this.validateDateField(condition, fieldValue);
+            errors.push(...dateErrors);
             break;
           case "boolean":
-            errors.push(...this.validateBooleanField(condition, fieldValue));
+            const boolErrors = this.validateBooleanField(condition, fieldValue);
+            errors.push(...boolErrors);
+            break;
+          case "text":
+            const textErrors = this.validateTextField(condition, fieldValue);
+            errors.push(...textErrors);
+            break;
+          case "number":
+            const numberErrors = this.validateNumberField(
+              condition,
+              fieldValue
+            );
+            errors.push(...numberErrors);
             break;
         }
       }
 
       return {
         isValid: errors.length === 0,
-        errors,
+        errors: errors,
       };
     } catch (error) {
       console.error("Error validando datos de tabla:", error);
@@ -566,9 +516,9 @@ class ActivatedTablesService {
   }
 
   /**
-   * Valida campos de tipo string
+   * Valida campos de tipo texto
    */
-  validateStringField(condition, value) {
+  validateTextField(condition, value) {
     const errors = [];
     const stringValue = String(value);
 
@@ -588,67 +538,30 @@ class ActivatedTablesService {
             );
           }
           break;
-
-        case "contains":
-          if (
-            !stringValue
-              .toLowerCase()
-              .includes(conditionValue.text.toLowerCase())
-          ) {
-            errors.push(
-              `El campo '${condition.ColumnName}' debe contener '${conditionValue.text}'`
-            );
-          }
-          break;
-
-        case "regex":
+        case "pattern":
           const regex = new RegExp(conditionValue.pattern);
           if (!regex.test(stringValue)) {
             errors.push(
-              `El campo '${condition.ColumnName}' no cumple con el patrón requerido`
-            );
-          }
-          break;
-
-        case "starts_with":
-          if (
-            !stringValue
-              .toLowerCase()
-              .startsWith(conditionValue.text.toLowerCase())
-          ) {
-            errors.push(
-              `El campo '${condition.ColumnName}' debe comenzar con '${conditionValue.text}'`
-            );
-          }
-          break;
-
-        case "ends_with":
-          if (
-            !stringValue
-              .toLowerCase()
-              .endsWith(conditionValue.text.toLowerCase())
-          ) {
-            errors.push(
-              `El campo '${condition.ColumnName}' debe terminar con '${conditionValue.text}'`
+              `El campo '${condition.ColumnName}' no cumple con el formato requerido`
             );
           }
           break;
       }
     } catch (error) {
-      console.error("Error validando campo string:", error);
+      console.error("Error validando campo texto:", error);
     }
 
     return errors;
   }
 
   /**
-   * Valida campos de tipo numérico
+   * Valida campos de tipo número
    */
-  validateNumericField(condition, value) {
+  validateNumberField(condition, value) {
     const errors = [];
-    const numericValue = parseFloat(value);
+    const numValue = Number(value);
 
-    if (isNaN(numericValue)) {
+    if (isNaN(numValue)) {
       errors.push(
         `El campo '${condition.ColumnName}' debe ser un número válido`
       );
@@ -662,7 +575,7 @@ class ActivatedTablesService {
         case "range":
           if (
             conditionValue.min !== undefined &&
-            numericValue < conditionValue.min
+            numValue < conditionValue.min
           ) {
             errors.push(
               `El campo '${condition.ColumnName}' debe ser mayor o igual a ${conditionValue.min}`
@@ -670,32 +583,27 @@ class ActivatedTablesService {
           }
           if (
             conditionValue.max !== undefined &&
-            numericValue > conditionValue.max
+            numValue > conditionValue.max
           ) {
             errors.push(
               `El campo '${condition.ColumnName}' debe ser menor o igual a ${conditionValue.max}`
             );
           }
           break;
-
-        case "min":
-          if (numericValue < conditionValue.value) {
-            errors.push(
-              `El campo '${condition.ColumnName}' debe ser mayor o igual a ${conditionValue.value}`
-            );
-          }
-          break;
-
-        case "max":
-          if (numericValue > conditionValue.value) {
-            errors.push(
-              `El campo '${condition.ColumnName}' debe ser menor o igual a ${conditionValue.value}`
-            );
+        case "precision":
+          if (conditionValue.decimals !== undefined) {
+            const decimalPlaces = (numValue.toString().split(".")[1] || "")
+              .length;
+            if (decimalPlaces > conditionValue.decimals) {
+              errors.push(
+                `El campo '${condition.ColumnName}' no puede tener más de ${conditionValue.decimals} decimales`
+              );
+            }
           }
           break;
       }
     } catch (error) {
-      console.error("Error validando campo numérico:", error);
+      console.error("Error validando campo número:", error);
     }
 
     return errors;

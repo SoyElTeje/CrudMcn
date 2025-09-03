@@ -1,34 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const authService = require("../services/authService");
-
-// Middleware para verificar token JWT
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
-
-  if (!token) {
-    return res.status(401).json({ error: "Token de acceso requerido" });
-  }
-
-  const user = authService.verifyToken(token);
-  if (!user) {
-    return res.status(403).json({ error: "Token inválido" });
-  }
-
-  req.user = user;
-  next();
-};
-
-// Middleware para verificar si es administrador
-const requireAdmin = (req, res, next) => {
-  if (!req.user.isAdmin) {
-    return res.status(403).json({
-      error: "Acceso denegado. Se requieren permisos de administrador",
-    });
-  }
-  next();
-};
+const { authenticateToken, requireAdmin } = require("../middleware/auth");
 
 // Ruta de login
 router.post("/login", async (req, res) => {
@@ -363,4 +336,4 @@ router.delete(
   }
 );
 
-module.exports = { router, authenticateToken, requireAdmin };
+module.exports = router;

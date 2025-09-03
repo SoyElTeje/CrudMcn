@@ -2,7 +2,7 @@
 USE APPDATA;
 
 -- Tabla para registrar todas las acciones de los usuarios
-CREATE TABLE SYSTEM_LOGS (
+CREATE TABLE LOGS (
     Id INT IDENTITY(1,1) PRIMARY KEY,
     UserId INT NOT NULL,
     Username NVARCHAR(100) NOT NULL,
@@ -19,10 +19,10 @@ CREATE TABLE SYSTEM_LOGS (
 );
 
 -- Índices para mejorar el rendimiento de consultas
-CREATE INDEX IX_SYSTEM_LOGS_UserId ON SYSTEM_LOGS(UserId);
-CREATE INDEX IX_SYSTEM_LOGS_Action ON SYSTEM_LOGS(Action);
-CREATE INDEX IX_SYSTEM_LOGS_Timestamp ON SYSTEM_LOGS(Timestamp);
-CREATE INDEX IX_SYSTEM_LOGS_DatabaseTable ON SYSTEM_LOGS(DatabaseName, TableName);
+CREATE INDEX IX_LOGS_UserId ON LOGS(UserId);
+CREATE INDEX IX_LOGS_Action ON LOGS(Action);
+CREATE INDEX IX_LOGS_FechaCreacion ON LOGS(FechaCreacion);
+CREATE INDEX IX_LOGS_DatabaseTable ON LOGS(DatabaseName, TableName);
 
 -- Comentarios sobre la tabla
 EXEC sp_addextendedproperty 
@@ -31,7 +31,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA',
     @level0name = N'dbo',
     @level1type = N'TABLE',
-    @level1name = N'SYSTEM_LOGS';
+    @level1name = N'LOGS';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description',
@@ -39,7 +39,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA',
     @level0name = N'dbo',
     @level1type = N'TABLE',
-    @level1name = N'SYSTEM_LOGS',
+    @level1name = N'LOGS',
     @level2type = N'COLUMN',
     @level2name = N'Id';
 
@@ -49,7 +49,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA',
     @level0name = N'dbo',
     @level1type = N'TABLE',
-    @level1name = N'SYSTEM_LOGS',
+    @level1name = N'LOGS',
     @level2type = N'COLUMN',
     @level2name = N'UserId';
 
@@ -59,7 +59,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA',
     @level0name = N'dbo',
     @level1type = N'TABLE',
-    @level1name = N'SYSTEM_LOGS',
+    @level1name = N'LOGS',
     @level2type = N'COLUMN',
     @level2name = N'Username';
 
@@ -69,7 +69,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA',
     @level0name = N'dbo',
     @level1type = N'TABLE',
-    @level1name = N'SYSTEM_LOGS',
+    @level1name = N'LOGS',
     @level2type = N'COLUMN',
     @level2name = N'Action';
 
@@ -79,7 +79,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA',
     @level0name = N'dbo',
     @level1type = N'TABLE',
-    @level1name = N'SYSTEM_LOGS',
+    @level1name = N'LOGS',
     @level2type = N'COLUMN',
     @level2name = N'DatabaseName';
 
@@ -89,7 +89,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA',
     @level0name = N'dbo',
     @level1type = N'TABLE',
-    @level1name = N'SYSTEM_LOGS',
+    @level1name = N'LOGS',
     @level2type = N'COLUMN',
     @level2name = N'TableName';
 
@@ -99,7 +99,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA',
     @level0name = N'dbo',
     @level1type = N'TABLE',
-    @level1name = N'SYSTEM_LOGS',
+    @level1name = N'LOGS',
     @level2type = N'COLUMN',
     @level2name = N'RecordId';
 
@@ -109,7 +109,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA',
     @level0name = N'dbo',
     @level1type = N'TABLE',
-    @level1name = N'SYSTEM_LOGS',
+    @level1name = N'LOGS',
     @level2type = N'COLUMN',
     @level2name = N'OldData';
 
@@ -119,7 +119,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA',
     @level0name = N'dbo',
     @level1type = N'TABLE',
-    @level1name = N'SYSTEM_LOGS',
+    @level1name = N'LOGS',
     @level2type = N'COLUMN',
     @level2name = N'NewData';
 
@@ -129,7 +129,7 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA',
     @level0name = N'dbo',
     @level1type = N'TABLE',
-    @level1name = N'SYSTEM_LOGS',
+    @level1name = N'LOGS',
     @level2type = N'COLUMN',
     @level2name = N'AffectedRows';
 
@@ -139,8 +139,8 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA',
     @level0name = N'dbo',
     @level1type = N'TABLE',
-    @level1name = N'SYSTEM_LOGS',
+    @level1name = N'LOGS',
     @level2type = N'COLUMN',
     @level2name = N'Timestamp';
 
-PRINT 'Tabla SYSTEM_LOGS creada exitosamente'; 
+PRINT 'Tabla LOGS creada exitosamente'; 
