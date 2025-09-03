@@ -34,33 +34,53 @@ class LogService {
 
       const pool = await getPool();
 
+      // Verificar si la tabla LOGS existe
+      const tableExistsQuery = `
+        SELECT COUNT(*) as count 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_NAME = 'LOGS'
+      `;
+
+      const tableExistsResult = await pool.request().query(tableExistsQuery);
+      const tableExists = tableExistsResult.recordset[0].count > 0;
+
+      if (!tableExists) {
+        console.log("⚠️ Tabla LOGS no existe, no se puede registrar log");
+        return;
+      }
+
       const query = `
-        INSERT INTO SYSTEM_LOGS (
-          UserId, Username, Action, DatabaseName, TableName, 
-          RecordId, OldData, NewData, AffectedRows, IPAddress, UserAgent
+        INSERT INTO LOGS (
+          UserId, Action, DatabaseName, TableName, 
+          Details, IPAddress, UserAgent, FechaCreacion
         ) VALUES (
-          @userId, @username, @action, @databaseName, @tableName,
-          @recordId, @oldData, @newData, @affectedRows, @ipAddress, @userAgent
+          @userId, @action, @databaseName, @tableName,
+          @details, @ipAddress, @userAgent, GETDATE()
         )
       `;
+
+      // Construir el campo Details con toda la información
+      const details = {
+        username,
+        recordId,
+        oldData,
+        newData,
+        affectedRows,
+      };
 
       await pool
         .request()
         .input("userId", userId)
-        .input("username", username)
         .input("action", action)
         .input("databaseName", databaseName)
         .input("tableName", tableName)
-        .input("recordId", recordId)
-        .input("oldData", oldData ? JSON.stringify(oldData) : null)
-        .input("newData", newData ? JSON.stringify(newData) : null)
-        .input("affectedRows", affectedRows)
+        .input("details", JSON.stringify(details))
         .input("ipAddress", ipAddress)
         .input("userAgent", userAgent)
         .query(query);
 
       console.log(
-        `✅ Log registrado: ${action} en ${databaseName}.${tableName} por ${username}`
+        `✅ Log registrado: ${action} en ${databaseName}.${tableName} por usuario ${userId}`
       );
     } catch (error) {
       console.error("❌ Error registrando log:", error);
@@ -181,14 +201,28 @@ class LogService {
     try {
       const pool = await getPool();
 
+      // Verificar si la tabla LOGS existe
+      const tableExistsQuery = `
+        SELECT COUNT(*) as count 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_NAME = 'LOGS'
+      `;
+
+      const tableExistsResult = await pool.request().query(tableExistsQuery);
+      const tableExists = tableExistsResult.recordset[0].count > 0;
+
+      if (!tableExists) {
+        console.log("⚠️ Tabla LOGS no existe, retornando logs vacíos");
+        return [];
+      }
+
       const query = `
         SELECT 
-          Id, UserId, Username, Action, DatabaseName, TableName,
-          RecordId, OldData, NewData, AffectedRows, Timestamp,
-          IPAddress, UserAgent
-        FROM SYSTEM_LOGS 
+          Id, UserId, Action, DatabaseName, TableName,
+          Details, FechaCreacion, IPAddress, UserAgent
+        FROM LOGS 
         WHERE UserId = @userId
-        ORDER BY Timestamp DESC
+        ORDER BY FechaCreacion DESC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `;
 
@@ -199,14 +233,21 @@ class LogService {
         .input("offset", offset)
         .query(query);
 
-      return result.recordset.map((log) => ({
-        ...log,
-        OldData: log.OldData ? JSON.parse(log.OldData) : null,
-        NewData: log.NewData ? JSON.parse(log.NewData) : null,
-      }));
+      return result.recordset.map((log) => {
+        const details = log.Details ? JSON.parse(log.Details) : {};
+        return {
+          ...log,
+          Username: details.username || null,
+          RecordId: details.recordId || null,
+          OldData: details.oldData || null,
+          NewData: details.newData || null,
+          AffectedRows: details.affectedRows || 1,
+        };
+      });
     } catch (error) {
       console.error("Error obteniendo logs del usuario:", error);
-      throw error;
+      // Si hay error, retornar logs vacíos en lugar de fallar
+      return [];
     }
   }
 
@@ -217,12 +258,32 @@ class LogService {
     try {
       const pool = await getPool();
 
+      // Verificar si la tabla LOGS existe
+      const tableExistsQuery = `
+        SELECT COUNT(*) as count 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_NAME = 'LOGS'
+      `;
+
+      const tableExistsResult = await pool.request().query(tableExistsQuery);
+      const tableExists = tableExistsResult.recordset[0].count > 0;
+
+      if (!tableExists) {
+        console.log("⚠️ Tabla LOGS no existe, retornando logs vacíos");
+        return {
+          data: [],
+          totalRecords: 0,
+          currentPage: 1,
+          totalPages: 0,
+          recordsPerPage: limit,
+        };
+      }
+
       let query = `
         SELECT 
-          Id, UserId, Username, Action, DatabaseName, TableName,
-          RecordId, OldData, NewData, AffectedRows, Timestamp,
-          IPAddress, UserAgent
-        FROM SYSTEM_LOGS 
+          Id, UserId, Action, DatabaseName, TableName,
+          Details, FechaCreacion, IPAddress, UserAgent
+        FROM LOGS 
         WHERE 1=1
       `;
 
@@ -250,19 +311,19 @@ class LogService {
       }
 
       if (filters.startDate) {
-        query += " AND Timestamp >= @startDate";
+        query += " AND FechaCreacion >= @startDate";
         request.input("startDate", filters.startDate);
       }
 
       if (filters.endDate) {
-        query += " AND Timestamp <= @endDate";
+        query += " AND FechaCreacion <= @endDate";
         request.input("endDate", filters.endDate);
       }
 
       // Query para contar el total de registros con los mismos filtros
       let countQuery = `
         SELECT COUNT(*) as total
-        FROM SYSTEM_LOGS 
+        FROM LOGS 
         WHERE 1=1
       `;
 
@@ -290,12 +351,12 @@ class LogService {
       }
 
       if (filters.startDate) {
-        countQuery += " AND Timestamp >= @startDate";
+        countQuery += " AND FechaCreacion >= @startDate";
         countRequest.input("startDate", filters.startDate);
       }
 
       if (filters.endDate) {
-        countQuery += " AND Timestamp <= @endDate";
+        countQuery += " AND FechaCreacion <= @endDate";
         countRequest.input("endDate", filters.endDate);
       }
 
@@ -306,7 +367,7 @@ class LogService {
           .input("offset", offset)
           .query(
             query +
-              " ORDER BY Timestamp DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY"
+              " ORDER BY FechaCreacion DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY"
           ),
         countRequest.query(countQuery),
       ]);
@@ -314,11 +375,17 @@ class LogService {
       const totalRecords = countResult.recordset[0].total;
 
       return {
-        data: result.recordset.map((log) => ({
-          ...log,
-          OldData: log.OldData ? JSON.parse(log.OldData) : null,
-          NewData: log.NewData ? JSON.parse(log.NewData) : null,
-        })),
+        data: result.recordset.map((log) => {
+          const details = log.Details ? JSON.parse(log.Details) : {};
+          return {
+            ...log,
+            Username: details.username || null,
+            RecordId: details.recordId || null,
+            OldData: details.oldData || null,
+            NewData: details.newData || null,
+            AffectedRows: details.affectedRows || 1,
+          };
+        }),
         totalRecords,
         currentPage: Math.floor(offset / limit) + 1,
         totalPages: Math.ceil(totalRecords / limit),
@@ -326,7 +393,14 @@ class LogService {
       };
     } catch (error) {
       console.error("Error obteniendo todos los logs:", error);
-      throw error;
+      // Si hay error, retornar logs vacíos en lugar de fallar
+      return {
+        data: [],
+        totalRecords: 0,
+        currentPage: 1,
+        totalPages: 0,
+        recordsPerPage: limit,
+      };
     }
   }
 
@@ -337,13 +411,28 @@ class LogService {
     try {
       const pool = await getPool();
 
+      // Verificar si la tabla LOGS existe
+      const tableExistsQuery = `
+        SELECT COUNT(*) as count 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_NAME = 'LOGS'
+      `;
+
+      const tableExistsResult = await pool.request().query(tableExistsQuery);
+      const tableExists = tableExistsResult.recordset[0].count > 0;
+
+      if (!tableExists) {
+        console.log("⚠️ Tabla LOGS no existe, retornando estadísticas vacías");
+        return [];
+      }
+
       const query = `
         SELECT 
           Action,
           COUNT(*) as Count,
           COUNT(DISTINCT UserId) as UniqueUsers,
           COUNT(DISTINCT DatabaseName + '.' + TableName) as UniqueTables
-        FROM SYSTEM_LOGS 
+        FROM LOGS 
         GROUP BY Action
         ORDER BY Count DESC
       `;
@@ -352,7 +441,8 @@ class LogService {
       return result.recordset;
     } catch (error) {
       console.error("Error obteniendo estadísticas de logs:", error);
-      throw error;
+      // Si hay error, retornar estadísticas vacías en lugar de fallar
+      return [];
     }
   }
 }

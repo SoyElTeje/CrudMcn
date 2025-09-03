@@ -15,23 +15,21 @@ async function setupLogsTable() {
     // Ejecutar el SQL
     await pool.request().query(sqlContent);
 
-    console.log("✅ Tabla SYSTEM_LOGS creada exitosamente");
+    console.log("✅ Tabla LOGS creada exitosamente");
 
     // Verificar que la tabla existe
     const checkQuery = `
       SELECT COUNT(*) as count 
       FROM INFORMATION_SCHEMA.TABLES 
-      WHERE TABLE_NAME = 'SYSTEM_LOGS'
+      WHERE TABLE_NAME = 'LOGS'
     `;
 
     const result = await pool.request().query(checkQuery);
 
     if (result.recordset[0].count > 0) {
-      console.log(
-        "✅ Verificación: Tabla SYSTEM_LOGS existe en la base de datos"
-      );
+      console.log("✅ Verificación: Tabla LOGS existe en la base de datos");
     } else {
-      console.log("❌ Error: La tabla SYSTEM_LOGS no se creó correctamente");
+      console.log("❌ Error: La tabla LOGS no se creó correctamente");
     }
   } catch (error) {
     console.error("❌ Error configurando tabla de logs:", error);

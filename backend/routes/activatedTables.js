@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const activatedTablesService = require("../services/activatedTablesService");
-const { authenticateToken, requireAdmin } = require("./auth");
+const { authenticateToken, requireAdmin } = require("../middleware/auth");
 
 // Obtener todas las bases de datos disponibles (excluyendo APPDATA) (solo admin)
 router.get("/databases", authenticateToken, requireAdmin, async (req, res) => {
@@ -104,7 +104,8 @@ router.post("/activate", authenticateToken, requireAdmin, async (req, res) => {
     }
 
     res.json({
-      message: "Tabla activada exitosamente",
+      success: true,
+      message: "Tabla activada correctamente",
       activatedTableId,
     });
   } catch (error) {
@@ -115,26 +116,19 @@ router.post("/activate", authenticateToken, requireAdmin, async (req, res) => {
 
 // Desactivar una tabla (solo admin)
 router.post(
-  "/deactivate",
+  "/deactivate/:databaseName/:tableName",
   authenticateToken,
   requireAdmin,
   async (req, res) => {
     try {
-      const { databaseName, tableName } = req.body;
+      const { databaseName, tableName } = req.params;
 
-      if (!databaseName || !tableName) {
-        return res
-          .status(400)
-          .json({ error: "DatabaseName y TableName son requeridos" });
-      }
+      await activatedTablesService.deactivateTable(databaseName, tableName);
 
-      await activatedTablesService.deactivateTable(
-        databaseName,
-        tableName,
-        req.user.id
-      );
-
-      res.json({ message: "Tabla desactivada exitosamente" });
+      res.json({
+        success: true,
+        message: "Tabla desactivada correctamente",
+      });
     } catch (error) {
       console.error("Error desactivando tabla:", error);
       res.status(500).json({ error: "Error interno del servidor" });
@@ -142,9 +136,61 @@ router.post(
   }
 );
 
-// Obtener condiciones de una tabla (solo admin)
+// Obtener condiciones de una tabla activada por database y table name (solo admin)
+// Esta ruta debe ir ANTES que la ruta /conditions/:activatedTableId para evitar conflictos
 router.get(
-  "/conditions/:activatedTableId",
+  "/conditions/:databaseName/:tableName",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { databaseName, tableName } = req.params;
+      const conditions =
+        await activatedTablesService.getTableConditionsByDatabaseAndTable(
+          databaseName,
+          tableName
+        );
+      res.json(conditions);
+    } catch (error) {
+      console.error("Error obteniendo condiciones de tabla:", error);
+      res.status(500).json({ error: "Error interno del servidor" });
+    }
+  }
+);
+
+// Actualizar condiciones de una tabla activada por database y table name (solo admin)
+router.put(
+  "/conditions/:databaseName/:tableName",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { databaseName, tableName } = req.params;
+      const { conditions, description } = req.body;
+      const userId = req.user.id;
+
+      await activatedTablesService.updateTableConditions(
+        databaseName,
+        tableName,
+        conditions,
+        description,
+        userId
+      );
+      res.json({
+        success: true,
+        message: "Condiciones y descripción actualizadas correctamente",
+      });
+    } catch (error) {
+      console.error("Error actualizando condiciones de tabla:", error);
+      res.status(500).json({ error: "Error interno del servidor" });
+    }
+  }
+);
+
+// Obtener condiciones de una tabla por ID (solo admin)
+// Esta ruta debe ir DESPUÉS de las rutas más específicas
+router.get(
+  "/conditions-by-id/:activatedTableId",
   authenticateToken,
   requireAdmin,
   async (req, res) => {
@@ -161,9 +207,9 @@ router.get(
   }
 );
 
-// Actualizar condiciones de una tabla (solo admin)
+// Actualizar condiciones de una tabla por ID (solo admin)
 router.put(
-  "/conditions/:activatedTableId",
+  "/conditions-by-id/:activatedTableId",
   authenticateToken,
   requireAdmin,
   async (req, res) => {
@@ -223,55 +269,6 @@ router.post(
       res.json(validation);
     } catch (error) {
       console.error("Error validando datos de tabla:", error);
-      res.status(500).json({ error: "Error interno del servidor" });
-    }
-  }
-);
-
-// Obtener condiciones de una tabla activada por database y table name (solo admin)
-router.get(
-  "/conditions/:databaseName/:tableName",
-  authenticateToken,
-  requireAdmin,
-  async (req, res) => {
-    try {
-      const { databaseName, tableName } = req.params;
-      const conditions =
-        await activatedTablesService.getTableConditionsByDatabaseAndTable(
-          databaseName,
-          tableName
-        );
-      res.json(conditions);
-    } catch (error) {
-      console.error("Error obteniendo condiciones de tabla:", error);
-      res.status(500).json({ error: "Error interno del servidor" });
-    }
-  }
-);
-
-// Actualizar condiciones de una tabla activada por database y table name (solo admin)
-router.put(
-  "/conditions/:databaseName/:tableName",
-  authenticateToken,
-  requireAdmin,
-  async (req, res) => {
-    try {
-      const { databaseName, tableName } = req.params;
-      const { conditions } = req.body;
-      const userId = req.user.id;
-
-      await activatedTablesService.updateTableConditions(
-        databaseName,
-        tableName,
-        conditions,
-        userId
-      );
-      res.json({
-        success: true,
-        message: "Condiciones actualizadas correctamente",
-      });
-    } catch (error) {
-      console.error("Error actualizando condiciones de tabla:", error);
       res.status(500).json({ error: "Error interno del servidor" });
     }
   }
