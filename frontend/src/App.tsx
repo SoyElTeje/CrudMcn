@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { API_CONFIG } from "./config/api";
+// API configuration
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 import {
   Table,
   TableHeader,
@@ -200,7 +201,7 @@ function App() {
 
   // Configurar axios con interceptor para token
   const api = axios.create({
-    baseURL: API_CONFIG.BASE_URL.replace("/api", ""),
+    baseURL: API_BASE_URL,
   });
 
   // Agregar interceptor para incluir token en todas las peticiones
@@ -1014,7 +1015,7 @@ function App() {
 
     try {
       const response = await fetch(
-        `${API_CONFIG.BASE_URL}/databases/${tableData.database}/tables/${tableData.table}/download-template`,
+        `${API_BASE_URL}/api/databases/${tableData.database}/tables/${tableData.table}/download-template`,
         {
           headers: {
             Authorization: `Bearer ${token}`,

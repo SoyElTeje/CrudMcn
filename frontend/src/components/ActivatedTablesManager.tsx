@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { formatDate } from "../lib/dateUtils";
-import { API_CONFIG } from "../config/api";
+// API configuration
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 import {
   Select,
   SelectTrigger,
@@ -78,7 +79,7 @@ const ActivatedTablesManager: React.FC = () => {
     get: async (url: string) => {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `${API_CONFIG.BASE_URL.replace("/api", "")}${url}`,
+        `${API_BASE_URL}${url}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -96,7 +97,7 @@ const ActivatedTablesManager: React.FC = () => {
     post: async (url: string, data: any) => {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `${API_CONFIG.BASE_URL.replace("/api", "")}${url}`,
+        `${API_BASE_URL}${url}`,
         {
           method: "POST",
           headers: {
@@ -116,7 +117,7 @@ const ActivatedTablesManager: React.FC = () => {
     put: async (url: string, data: any) => {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `${API_CONFIG.BASE_URL.replace("/api", "")}${url}`,
+        `${API_BASE_URL}${url}`,
         {
           method: "PUT",
           headers: {

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Pagination } from "./Pagination";
-import { API_CONFIG } from "../config/api";
+// API configuration
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
 interface LogEntry {
   Id: number;
@@ -42,7 +43,7 @@ const LogsViewer: React.FC = () => {
     get: async (url: string) => {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `${API_CONFIG.BASE_URL.replace("/api", "")}${url}`,
+        `${API_BASE_URL.replace("/api", "")}${url}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
