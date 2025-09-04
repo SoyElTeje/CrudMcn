@@ -891,12 +891,21 @@ function App() {
 
   // Función para cargar todas las tablas accesibles
   const fetchAccessibleTables = async () => {
-    if (!isAuthenticated) return;
+    console.log(
+      "🔍 Debug: fetchAccessibleTables called, isAuthenticated:",
+      isAuthenticated
+    );
+    if (!isAuthenticated) {
+      console.log("🔍 Debug: Not authenticated, returning");
+      return;
+    }
 
     try {
       // Obtener solo las bases de datos a las que el usuario tiene acceso
+      console.log("🔍 Debug: Calling /api/databases");
       const res = await api.get("/api/databases");
       const dbList = res.data;
+      console.log("🔍 Debug: Databases received:", dbList);
 
       const allTables: TableInfo[] = [];
       for (const db of dbList) {
@@ -933,6 +942,10 @@ function App() {
 
   // Fetch accessible databases and their tables on mount
   useEffect(() => {
+    console.log(
+      "🔍 Debug: useEffect triggered, isAuthenticated:",
+      isAuthenticated
+    );
     fetchAccessibleTables();
   }, [isAuthenticated]);
 
