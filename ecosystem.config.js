@@ -41,6 +41,7 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: 5173,
+        CURRENT_IP: "192.168.1.31:3001",
       },
       error_file: "../logs/frontend-error.log",
       out_file: "../logs/frontend-out.log",
