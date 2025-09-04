@@ -8,7 +8,7 @@ Guía completa para desplegar la aplicación AbmMcn en el servidor de producció
 
 - ✅ Windows Server (o Windows 10/11)
 - ✅ Node.js 18+ instalado
-- ✅ Git instalado
+- ✅ Git Bash instalado
 - ✅ Acceso a SQL Server de producción
 - ✅ Puertos 3001 y 4173 disponibles
 
@@ -21,8 +21,8 @@ node --version
 # Verificar npm
 npm --version
 
-# Verificar Git
-git --version
+# Verificar Git Bash
+bash --version
 ```
 
 ## 🔧 Paso a Paso del Despliegue
@@ -48,10 +48,10 @@ cd AbmMcn
 
 ```bash
 # Copiar archivo de configuración de producción
-copy env.production.example .env
+cp env.production.example .env
 
 # Editar con credenciales reales
-notepad .env
+nano .env
 ```
 
 **Configuración del archivo .env:**
@@ -100,7 +100,7 @@ npm run build
 ```bash
 # Usar el script de prueba
 cd testDb
-node test_db.js
+./run.sh
 ```
 
 ## 🚀 Iniciar la Aplicación
@@ -109,10 +109,10 @@ node test_db.js
 
 ```bash
 # Despliegue completo
-deploy-production.bat
+./deploy-production.sh
 
 # Iniciar aplicación
-start-production.bat
+./start-production.sh
 ```
 
 ### **Opción B: Comandos Manuales**
@@ -196,6 +196,12 @@ curl http://localhost:3001/api/health
 - La aplicación debería conectarse a la base de datos de producción
 - Verificar que las tablas se muestren correctamente
 
+### **4. Script de Verificación Automática:**
+
+```bash
+./test-production.sh
+```
+
 ## 🛠️ Solución de Problemas
 
 ### **Error de Conexión a Base de Datos**
@@ -203,7 +209,7 @@ curl http://localhost:3001/api/health
 - Verificar credenciales en .env
 - Verificar que SQL Server esté accesible desde el servidor
 - Verificar puerto 1433 abierto
-- Probar con el script testDb
+- Probar con el script testDb: `cd testDb && ./run.sh`
 
 ### **Error de CORS**
 

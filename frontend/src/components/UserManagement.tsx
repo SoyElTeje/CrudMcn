@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { API_CONFIG } from "../config/api";
 import { formatDate } from "../lib/dateUtils";
 import {
   Table,
@@ -156,7 +157,7 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
 
       // Usar axios directamente con el token para evitar problemas con el interceptor
       const response = await axios.post(
-        "http://localhost:3001/api/auth/users",
+        `${API_CONFIG.BASE_URL}/auth/users`,
         newUser,
         {
           headers: {

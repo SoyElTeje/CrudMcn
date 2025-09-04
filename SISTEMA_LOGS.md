@@ -31,10 +31,10 @@ Para cada acción se registra:
 
 ## Estructura de la Base de Datos
 
-### Tabla: SYSTEM_LOGS
+### Tabla: LOGS
 
 ```sql
-CREATE TABLE SYSTEM_LOGS (
+CREATE TABLE LOGS (
     Id INT IDENTITY(1,1) PRIMARY KEY,
     UserId INT NOT NULL,
     Username NVARCHAR(100) NOT NULL,
@@ -53,10 +53,10 @@ CREATE TABLE SYSTEM_LOGS (
 
 ### Índices Optimizados
 
-- `IX_SYSTEM_LOGS_UserId` - Para consultas por usuario
-- `IX_SYSTEM_LOGS_Action` - Para filtros por tipo de acción
-- `IX_SYSTEM_LOGS_Timestamp` - Para consultas por fecha
-- `IX_SYSTEM_LOGS_DatabaseTable` - Para consultas por base de datos/tabla
+- `IX_LOGS_UserId` - Para consultas por usuario
+- `IX_LOGS_Action` - Para filtros por tipo de acción
+- `IX_LOGS_FechaCreacion` - Para consultas por fecha
+- `IX_LOGS_DatabaseTable` - Para consultas por base de datos/tabla
 
 ## Implementación Backend
 
@@ -233,7 +233,7 @@ npm start
 
 ### Recomendaciones
 
-1. **Backup Regular**: Hacer backup de la tabla SYSTEM_LOGS
+1. **Backup Regular**: Hacer backup de la tabla LOGS
 2. **Limpieza Periódica**: Implementar limpieza automática de logs antiguos
 3. **Monitoreo**: Configurar alertas para acciones críticas
 4. **Auditoría**: Revisar logs regularmente para detectar anomalías
@@ -244,12 +244,12 @@ npm start
 
 ```sql
 -- Eliminar logs de más de 1 año
-DELETE FROM SYSTEM_LOGS
-WHERE Timestamp < DATEADD(YEAR, -1, GETDATE());
+DELETE FROM LOGS
+WHERE FechaCreacion < DATEADD(YEAR, -1, GETDATE());
 
 -- Eliminar logs de más de 6 meses (mantener solo los últimos 6 meses)
-DELETE FROM SYSTEM_LOGS
-WHERE Timestamp < DATEADD(MONTH, -6, GETDATE());
+DELETE FROM LOGS
+WHERE FechaCreacion < DATEADD(MONTH, -6, GETDATE());
 ```
 
 ### Estadísticas de Uso
@@ -263,8 +263,8 @@ SELECT
     COUNT(CASE WHEN Action = 'UPDATE' THEN 1 END) as Updates,
     COUNT(CASE WHEN Action = 'DELETE' THEN 1 END) as Deletes,
     COUNT(CASE WHEN Action = 'EXPORT' THEN 1 END) as Exports
-FROM SYSTEM_LOGS
-WHERE Timestamp >= DATEADD(MONTH, -1, GETDATE())
+FROM LOGS
+WHERE FechaCreacion >= DATEADD(MONTH, -1, GETDATE())
 GROUP BY Username
 ORDER BY TotalActions DESC;
 ```
@@ -274,7 +274,7 @@ ORDER BY TotalActions DESC;
 ### Problemas Comunes
 
 1. **Logs no se registran**: Verificar que el servicio de logs esté funcionando
-2. **Error de permisos**: Verificar que el usuario tenga permisos en la tabla SYSTEM_LOGS
+2. **Error de permisos**: Verificar que el usuario tenga permisos en la tabla LOGS
 3. **Rendimiento lento**: Verificar índices y considerar particionamiento
 4. **Espacio en disco**: Implementar limpieza automática de logs
 
