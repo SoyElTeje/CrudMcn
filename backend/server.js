@@ -176,8 +176,21 @@ app.get(
 
       // Obtener solo las tablas activadas para esta base de datos
       const activatedTables = await activatedTablesService.getActivatedTables();
+      console.log(
+        `🔍 Debug: Activated tables for ${dbName}:`,
+        activatedTables.length
+      );
+      console.log(
+        `🔍 Debug: All activated tables:`,
+        activatedTables.map((t) => `${t.DatabaseName}.${t.TableName}`)
+      );
+
       const tablesForDb = activatedTables.filter(
         (table) => table.DatabaseName === dbName
+      );
+      console.log(
+        `🔍 Debug: Filtered tables for ${dbName}:`,
+        tablesForDb.length
       );
 
       // Si el usuario es admin, mostrar todas las tablas activadas
