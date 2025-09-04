@@ -1,47 +1,70 @@
+require("dotenv").config();
 const axios = require("axios");
-
-const BASE_URL = "http://localhost:3001";
 
 async function testEndpoint() {
   try {
-    console.log("🧪 Probando endpoint de tablas activadas...");
+    console.log("🔍 Probando endpoint de tablas...");
 
-    // Probar sin token (debe fallar)
-    try {
-      const response = await axios.get(
-        `${BASE_URL}/api/activated-tables/all-tables`
-      );
-      console.log("❌ Debería haber fallado sin token");
-    } catch (error) {
-      console.log("✅ Correcto: Falló sin token:", error.response?.status);
-    }
+    // Primero hacer login para obtener token
+    const loginResponse = await axios.post(
+      "http://localhost:3001/api/auth/login",
+      {
+        username: "admin",
+        password: "admin",
+      }
+    );
 
-    // Probar con token inválido
+    const token = loginResponse.data.token;
+    console.log("✅ Login exitoso, token obtenido");
+
+    // Probar endpoint de bases de datos
+    console.log("\n📊 Probando /api/databases...");
+    const databasesResponse = await axios.get(
+      "http://localhost:3001/api/databases",
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    console.log("Bases de datos accesibles:", databasesResponse.data);
+
+    // Probar endpoint de tablas para BI_Editor
+    console.log("\n📋 Probando /api/databases/BI_Editor/tables...");
     try {
-      const response = await axios.get(
-        `${BASE_URL}/api/activated-tables/all-tables`,
+      const tablesResponse = await axios.get(
+        "http://localhost:3001/api/databases/BI_Editor/tables",
         {
-          headers: {
-            Authorization: "Bearer invalid_token",
-          },
+          headers: { Authorization: `Bearer ${token}` },
         }
       );
-      console.log("❌ Debería haber fallado con token inválido");
+      console.log("✅ Tablas de BI_Editor:", tablesResponse.data);
     } catch (error) {
-      console.log(
-        "✅ Correcto: Falló con token inválido:",
-        error.response?.status
-      );
+      console.log("❌ Error obteniendo tablas de BI_Editor:");
+      console.log("Status:", error.response?.status);
+      console.log("Error:", error.response?.data);
     }
 
-    console.log("✅ Endpoint está funcionando correctamente");
+    // Probar endpoint de tablas activadas
+    console.log("\n🎯 Probando /api/activated-tables/activated...");
+    try {
+      const activatedResponse = await axios.get(
+        "http://localhost:3001/api/activated-tables/activated",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      console.log("✅ Tablas activadas:", activatedResponse.data);
+    } catch (error) {
+      console.log("❌ Error obteniendo tablas activadas:");
+      console.log("Status:", error.response?.status);
+      console.log("Error:", error.response?.data);
+    }
   } catch (error) {
-    console.error("❌ Error probando endpoint:", error.message);
+    console.error("❌ Error general:", error.message);
+    if (error.response) {
+      console.log("Status:", error.response.status);
+      console.log("Data:", error.response.data);
+    }
   }
 }
 
-if (require.main === module) {
-  testEndpoint();
-}
-
-module.exports = { testEndpoint };
+testEndpoint();

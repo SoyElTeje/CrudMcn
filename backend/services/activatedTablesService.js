@@ -104,11 +104,11 @@ class ActivatedTablesService {
           at.TableName,
           at.Description,
           at.IsActive,
-          at.CreatedAt,
+          at.FechaCreacion,
           at.CreatedBy,
-          u.Username as CreatedByUsername
-        FROM ActivatedTables at
-        LEFT JOIN Users u ON at.CreatedBy = u.Id
+          u.username as CreatedByUsername
+        FROM ACTIVATED_TABLES at
+        LEFT JOIN users u ON at.CreatedBy = u.id
         WHERE at.IsActive = 1
         ORDER BY at.DatabaseName, at.TableName
       `;
@@ -163,7 +163,7 @@ class ActivatedTablesService {
 
       // Verificar si la tabla ya está activada
       const checkQuery = `
-        SELECT Id FROM ActivatedTables 
+        SELECT Id FROM ACTIVATED_TABLES 
         WHERE DatabaseName = @databaseName AND TableName = @tableName
       `;
 
@@ -176,8 +176,8 @@ class ActivatedTablesService {
       if (checkResult.recordset.length > 0) {
         // Si ya existe, actualizar
         const updateQuery = `
-          UPDATE ActivatedTables 
-          SET Description = @description, IsActive = 1, UpdatedAt = GETDATE()
+          UPDATE ACTIVATED_TABLES 
+          SET Description = @description, IsActive = 1, FechaModificacion = GETDATE()
           WHERE DatabaseName = @databaseName AND TableName = @tableName
         `;
 
@@ -192,7 +192,7 @@ class ActivatedTablesService {
       } else {
         // Si no existe, crear nueva
         const insertQuery = `
-          INSERT INTO ActivatedTables (DatabaseName, TableName, Description, IsActive, CreatedAt, CreatedBy)
+          INSERT INTO ACTIVATED_TABLES (DatabaseName, TableName, Description, IsActive, FechaCreacion, CreatedBy)
           VALUES (@databaseName, @tableName, @description, 1, GETDATE(), @userId)
         `;
 
@@ -220,8 +220,8 @@ class ActivatedTablesService {
       const pool = await getPool();
 
       const query = `
-        UPDATE ActivatedTables 
-        SET IsActive = 0, UpdatedAt = GETDATE()
+        UPDATE ACTIVATED_TABLES 
+        SET IsActive = 0, FechaModificacion = GETDATE()
         WHERE DatabaseName = @databaseName AND TableName = @tableName
       `;
 
@@ -254,7 +254,7 @@ class ActivatedTablesService {
           tc.IsRequired,
           tc.CreatedAt,
           tc.CreatedBy
-        FROM TableConditions tc
+        FROM TABLE_CONDITIONS tc
         WHERE tc.ActivatedTableId = @activatedTableId
         ORDER BY tc.ColumnName
       `;
@@ -287,8 +287,8 @@ class ActivatedTablesService {
           tc.IsRequired,
           tc.CreatedAt,
           tc.CreatedBy
-        FROM TableConditions tc
-        INNER JOIN ActivatedTables at ON tc.ActivatedTableId = at.Id
+        FROM TABLE_CONDITIONS tc
+        INNER JOIN ACTIVATED_TABLES at ON tc.ActivatedTableId = at.Id
         WHERE at.DatabaseName = @databaseName 
         AND at.TableName = @tableName
         AND at.IsActive = 1
@@ -317,7 +317,7 @@ class ActivatedTablesService {
 
       // Eliminar condiciones existentes
       const deleteQuery = `
-        DELETE FROM TableConditions 
+        DELETE FROM TABLE_CONDITIONS 
         WHERE ActivatedTableId = @activatedTableId
       `;
 
@@ -329,7 +329,7 @@ class ActivatedTablesService {
       // Insertar nuevas condiciones
       for (const condition of conditions) {
         const insertQuery = `
-          INSERT INTO TableConditions (
+          INSERT INTO TABLE_CONDITIONS (
             ActivatedTableId, ColumnName, ConditionType, 
             ConditionValue, IsRequired, CreatedAt, CreatedBy
           )
@@ -372,7 +372,7 @@ class ActivatedTablesService {
 
       // Obtener el ID de la tabla activada
       const tableQuery = `
-        SELECT Id FROM ActivatedTables 
+        SELECT Id FROM ACTIVATED_TABLES 
         WHERE DatabaseName = @databaseName AND TableName = @tableName
       `;
 
@@ -391,8 +391,8 @@ class ActivatedTablesService {
       // Actualizar descripción
       if (description) {
         const updateDescQuery = `
-          UPDATE ActivatedTables 
-          SET Description = @description, UpdatedAt = GETDATE()
+          UPDATE ACTIVATED_TABLES 
+          SET Description = @description, FechaModificacion = GETDATE()
           WHERE Id = @activatedTableId
         `;
 
@@ -423,7 +423,7 @@ class ActivatedTablesService {
       const pool = await getPool();
 
       const query = `
-        SELECT Id FROM ActivatedTables 
+        SELECT Id FROM ACTIVATED_TABLES 
         WHERE DatabaseName = @databaseName 
         AND TableName = @tableName 
         AND IsActive = 1

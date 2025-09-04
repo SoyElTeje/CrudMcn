@@ -82,3 +82,4 @@ async function testGetConditions() {
 // Ejecutar la prueba
 testGetConditions();
 
+

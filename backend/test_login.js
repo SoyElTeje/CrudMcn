@@ -1,56 +1,69 @@
-const axios = require("axios");
+require("dotenv").config();
+const sql = require("mssql");
+const bcrypt = require("bcrypt");
 
-const BASE_URL = "http://localhost:3001";
-
-async function testLogin(username, password) {
+async function testLogin() {
   try {
-    console.log(`🔐 Probando login con: ${username}/${password}`);
-    const response = await axios.post(`${BASE_URL}/api/auth/login`, {
-      username,
-      password,
-    });
-    console.log(`✅ Login exitoso para ${username}`);
-    return response.data.token;
-  } catch (error) {
+    console.log("🔍 Verificando credenciales de admin...");
+
+    const config = {
+      server: process.env.DB_SERVER || "localhost",
+      database: "APPDATA",
+      user: process.env.DB_USER || "sa",
+      password: process.env.DB_PASSWORD || "simpleDev!",
+      options: { encrypt: false, trustServerCertificate: true },
+    };
+
+    const pool = await sql.connect(config);
+
+    // Verificar usuario admin
+    const userResult = await pool.request().query(`
+      SELECT id, username, password_hash, is_admin FROM users WHERE username = 'admin'
+    `);
+
+    if (userResult.recordset.length === 0) {
+      console.log("❌ Usuario admin no encontrado");
+      return;
+    }
+
+    const user = userResult.recordset[0];
+    console.log("👤 Usuario admin encontrado:");
+    console.log("  - ID:", user.id);
+    console.log("  - Username:", user.username);
+    console.log("  - is_admin:", user.is_admin);
     console.log(
-      `❌ Login falló para ${username}: ${
-        error.response?.data?.error || error.message
-      }`
+      "  - Password hash:",
+      user.password_hash.substring(0, 20) + "..."
     );
-    return null;
+
+    // Probar diferentes contraseñas comunes
+    const commonPasswords = [
+      "admin",
+      "admin123",
+      "password",
+      "123456",
+      "simpleDev!",
+    ];
+
+    console.log("\n🔐 Probando contraseñas comunes:");
+    for (const password of commonPasswords) {
+      try {
+        const isValid = await bcrypt.compare(password, user.password_hash);
+        if (isValid) {
+          console.log(`✅ Contraseña correcta: "${password}"`);
+          break;
+        } else {
+          console.log(`❌ Contraseña incorrecta: "${password}"`);
+        }
+      } catch (error) {
+        console.log(`❌ Error verificando "${password}":`, error.message);
+      }
+    }
+
+    await pool.close();
+  } catch (error) {
+    console.error("❌ Error:", error.message);
   }
 }
 
-async function testAllLogins() {
-  console.log("🧪 Probando diferentes credenciales de login...\n");
-
-  const testCredentials = [
-    { username: "admin", password: "admin123" },
-    { username: "user", password: "user123" },
-    { username: "user", password: "password" },
-    { username: "user", password: "user" },
-    { username: "testuser_ui", password: "test123" },
-    { username: "testuser_ui", password: "password" },
-    { username: "testuser_ui", password: "testuser_ui" },
-    { username: "testuser_red_modals", password: "test123" },
-    { username: "testuser_red_modals", password: "password" },
-    { username: "testuser_red_modals", password: "testuser_red_modals" },
-    { username: "testuser_close_button", password: "test123" },
-    { username: "testuser_close_button", password: "password" },
-    { username: "testuser_close_button", password: "testuser_close_button" },
-    { username: "testuser_close_visible", password: "test123" },
-    { username: "testuser_close_visible", password: "password" },
-    { username: "testuser_close_visible", password: "testuser_close_visible" },
-  ];
-
-  for (const cred of testCredentials) {
-    await testLogin(cred.username, cred.password);
-    console.log("---");
-  }
-}
-
-if (require.main === module) {
-  testAllLogins();
-}
-
-module.exports = { testLogin };
+testLogin();

@@ -1,109 +1,83 @@
+require("dotenv").config();
 const axios = require("axios");
 
-const BASE_URL = "http://localhost:3001";
-let authToken = null;
-
-// Función para obtener token de admin
-async function getAdminToken() {
+async function testFrontendSimulation() {
   try {
-    const response = await axios.post(`${BASE_URL}/api/auth/login`, {
-      username: "admin",
-      password: "admin",
-    });
+    console.log("🔍 Simulando llamadas del frontend...");
 
-    console.log("✅ Token obtenido correctamente");
-    return response.data.token;
-  } catch (error) {
-    console.error(
-      "❌ Error obteniendo token:",
-      error.response?.data || error.message
-    );
-    throw error;
-  }
-}
-
-// Función para simular exactamente lo que envía el frontend
-async function simulateFrontendRequest() {
-  try {
-    console.log("🧪 Simulando request del frontend...");
-
-    // 1. Obtener token de admin
-    authToken = await getAdminToken();
-
-    // 2. Simular la condición exacta que envía el frontend
-    // Según el log del frontend: {columnName: 'ID', dataType: 'int', conditionType: 'min', conditionValue: '{"value":"1"}', isRequired: false}
-    const frontendCondition = {
-      columnName: "ID",
-      dataType: "int",
-      conditionType: "min",
-      conditionValue: '{"value":"1"}',
-      isRequired: false,
-    };
-
-    console.log(
-      "📋 Condición del frontend:",
-      JSON.stringify(frontendCondition, null, 2)
-    );
-
-    // 3. Verificar que todos los campos estén presentes y sean válidos
-    console.log("🔍 Validando campos:");
-    console.log(
-      "  - columnName:",
-      typeof frontendCondition.columnName,
-      frontendCondition.columnName
-    );
-    console.log(
-      "  - dataType:",
-      typeof frontendCondition.dataType,
-      frontendCondition.dataType
-    );
-    console.log(
-      "  - conditionType:",
-      typeof frontendCondition.conditionType,
-      frontendCondition.conditionType
-    );
-    console.log(
-      "  - conditionValue:",
-      typeof frontendCondition.conditionValue,
-      frontendCondition.conditionValue
-    );
-    console.log(
-      "  - isRequired:",
-      typeof frontendCondition.isRequired,
-      frontendCondition.isRequired
-    );
-
-    // 4. Intentar actualizar condiciones
-    console.log("\n📤 Enviando request al backend...");
-    const response = await axios.put(
-      `${BASE_URL}/api/activated-tables/conditions/BI_Editor/TEST_ABM`,
+    // Login como admin
+    const loginResponse = await axios.post(
+      "http://localhost:3001/api/auth/login",
       {
-        conditions: [frontendCondition],
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          "Content-Type": "application/json",
-        },
+        username: "admin",
+        password: "admin",
       }
     );
 
-    console.log("✅ Respuesta del backend:", response.data);
-  } catch (error) {
-    console.error(
-      "❌ Error en la simulación:",
-      error.response?.data || error.message
-    );
+    const token = loginResponse.data.token;
+    console.log("✅ Login exitoso");
 
+    // Configurar axios como lo hace el frontend
+    const api = axios.create({
+      baseURL: "http://localhost:3001",
+    });
+
+    api.interceptors.request.use((config) => {
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    });
+
+    // Simular fetchAccessibleTables del frontend
+    console.log("\n📊 Simulando fetchAccessibleTables...");
+
+    // 1. Obtener bases de datos
+    const res = await api.get("/api/databases");
+    const dbList = res.data;
+    console.log("Bases de datos obtenidas:", dbList.length);
+
+    const allTables = [];
+    for (const db of dbList) {
+      // Saltar APPDATA como hace el frontend
+      if (db === "APPDATA") {
+        console.log(`Omitiendo base de datos de la aplicación: ${db}`);
+        continue;
+      }
+
+      try {
+        console.log(`\n🔍 Obteniendo tablas de ${db}...`);
+        const tablesResponse = await api.get(`/api/databases/${db}/tables`);
+
+        console.log(
+          `Respuesta para ${db}:`,
+          JSON.stringify(tablesResponse.data, null, 2)
+        );
+
+        const dbTables = tablesResponse.data.map((table) => ({
+          ...table,
+          database: db,
+        }));
+
+        console.log(`Tablas procesadas para ${db}:`, dbTables.length);
+        allTables.push(...dbTables);
+      } catch (error) {
+        console.warn(
+          `No se pudieron cargar las tablas de ${db}:`,
+          error.response?.data?.error || error.message
+        );
+      }
+    }
+
+    console.log(`\n📋 Total de tablas encontradas: ${allTables.length}`);
+    console.log("Tablas:", JSON.stringify(allTables, null, 2));
+  } catch (error) {
+    console.error("❌ Error:", error.message);
     if (error.response) {
-      console.error("📊 Detalles del error:");
-      console.error("  - Status:", error.response.status);
-      console.error("  - Data:", error.response.data);
-      console.error("  - Headers:", error.response.headers);
+      console.log("Status:", error.response.status);
+      console.log("Data:", error.response.data);
     }
   }
 }
 
-// Ejecutar la simulación
-simulateFrontendRequest();
-
+testFrontendSimulation();
