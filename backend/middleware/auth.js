@@ -63,8 +63,32 @@ const requirePermission = (permission) => {
   };
 };
 
+/**
+ * Middleware para verificar permisos de lectura
+ */
+const requireReadPermission = requirePermission("read");
+
+/**
+ * Middleware para verificar permisos de escritura
+ */
+const requireWritePermission = requirePermission("write");
+
+/**
+ * Middleware para verificar permisos de creación
+ */
+const requireCreatePermission = requirePermission("create");
+
+/**
+ * Middleware para verificar permisos de eliminación
+ */
+const requireDeletePermission = requirePermission("delete");
+
 module.exports = {
   authenticateToken,
   requireAdmin,
   requirePermission,
+  requireReadPermission,
+  requireWritePermission,
+  requireCreatePermission,
+  requireDeletePermission,
 };

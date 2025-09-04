@@ -18,20 +18,23 @@ const createRateLimiter = (windowMs = 15 * 60 * 1000, max = 100) => {
 
 // Configuración de CORS para producción
 const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = process.env.CORS_ORIGIN?.split(",") || [
-      "http://localhost:5173",
-    ];
+  origin:
+    process.env.CORS_ORIGIN === "*"
+      ? true
+      : function (origin, callback) {
+          const allowedOrigins = process.env.CORS_ORIGIN?.split(",") || [
+            "http://localhost:5173",
+          ];
 
-    // Permitir requests sin origin (como aplicaciones móviles)
-    if (!origin) return callback(null, true);
+          // Permitir requests sin origin (como aplicaciones móviles)
+          if (!origin) return callback(null, true);
 
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("No permitido por CORS"));
-    }
-  },
+          if (allowedOrigins.includes(origin)) {
+            callback(null, true);
+          } else {
+            callback(new Error("No permitido por CORS"));
+          }
+        },
   credentials: true,
   optionsSuccessStatus: 200,
 };
@@ -59,7 +62,3 @@ module.exports = {
   corsOptions,
   helmetConfig,
 };
-
-
-
-

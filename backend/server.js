@@ -15,7 +15,14 @@ const {
   isMMDDYYYYFormat,
 } = require("./utils/dateUtils");
 
-const { authenticateToken, requireAdmin } = require("./middleware/auth");
+const {
+  authenticateToken,
+  requireAdmin,
+  requireReadPermission,
+  requireWritePermission,
+  requireCreatePermission,
+  requireDeletePermission,
+} = require("./middleware/auth");
 
 // Importar middleware de upload y servicio de Excel
 const upload = require("./middleware/upload");
@@ -32,7 +39,11 @@ const authService = require("./services/authService");
 // Middleware
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+    origin:
+      process.env.CORS_ORIGIN === "*"
+        ? true
+        : process.env.CORS_ORIGIN || "http://localhost:5173",
+    credentials: true,
   })
 );
 app.use(express.json());
@@ -227,7 +238,7 @@ app.get(
 app.get(
   "/api/databases/:dbName/tables/:tableName/structure",
   authenticateToken,
-  requireAdmin,
+  requireReadPermission,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -312,7 +323,7 @@ app.get(
 app.get(
   "/api/databases/:dbName/tables/:tableName/records",
   authenticateToken,
-  requireAdmin,
+  requireReadPermission,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -442,7 +453,7 @@ app.get(
 app.get(
   "/api/databases/:dbName/tables/:tableName/count",
   authenticateToken,
-  requireAdmin,
+  requireReadPermission,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -487,7 +498,7 @@ app.get(
 app.post(
   "/api/databases/:dbName/tables/:tableName/records",
   authenticateToken,
-  requireAdmin,
+  requireCreatePermission,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -721,7 +732,7 @@ app.post(
 app.put(
   "/api/databases/:dbName/tables/:tableName/records",
   authenticateToken,
-  requireAdmin,
+  requireWritePermission,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -963,7 +974,7 @@ app.put(
 app.delete(
   "/api/databases/:dbName/tables/:tableName/records",
   authenticateToken,
-  requireAdmin,
+  requireDeletePermission,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -1055,7 +1066,7 @@ app.delete(
 app.delete(
   "/api/databases/:dbName/tables/:tableName/records/bulk",
   authenticateToken,
-  requireAdmin,
+  requireDeletePermission,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -1161,7 +1172,7 @@ app.delete(
 app.post(
   "/api/databases/:dbName/tables/:tableName/import-excel",
   authenticateToken,
-  requireAdmin,
+  requireWritePermission,
   upload.single("excelFile"),
   async (req, res) => {
     try {
@@ -1268,7 +1279,7 @@ app.get(
 app.get(
   "/api/databases/:dbName/tables/:tableName/download-template",
   authenticateToken,
-  requireAdmin,
+  requireReadPermission,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
@@ -1306,7 +1317,7 @@ app.get(
 app.post(
   "/api/databases/:dbName/tables/:tableName/preview-excel",
   authenticateToken,
-  requireAdmin,
+  requireReadPermission,
   upload.single("excelFile"),
   async (req, res) => {
     try {
@@ -1407,7 +1418,7 @@ app.post(
 app.get(
   "/api/databases/:dbName/tables/:tableName/export-excel",
   authenticateToken,
-  requireAdmin,
+  requireReadPermission,
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
