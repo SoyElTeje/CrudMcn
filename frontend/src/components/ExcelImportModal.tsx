@@ -1,7 +1,8 @@
 import React, { useState, useRef } from "react";
 import { Button } from "./ui/button";
 import axios from "axios";
-import { API_CONFIG } from "../config/api";
+// API configuration
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
 interface ExcelImportModalProps {
   isOpen: boolean;
@@ -42,7 +43,7 @@ export function ExcelImportModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const api = axios.create({
-    baseURL: API_CONFIG.BASE_URL.replace("/api", ""),
+    baseURL: API_BASE_URL.replace("/api", ""),
     headers: {
       Authorization: `Bearer ${token}`,
     },

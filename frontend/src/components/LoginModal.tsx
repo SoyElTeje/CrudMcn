@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
-import { API_CONFIG } from "../config/api";
+// API configuration
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 import { Button } from "./ui/button";
 
 interface LoginModalProps {
@@ -30,7 +31,7 @@ export function LoginModal({ isOpen, onLogin }: LoginModalProps) {
 
     try {
       const response = await axios.post(
-        `${API_CONFIG.BASE_URL}/auth/login`,
+        `${API_BASE_URL}/api/auth/login`,
         credentials
       );
 
