@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { formatDate } from "../lib/dateUtils";
+import { API_CONFIG } from "../config/api";
 import {
   Select,
   SelectTrigger,
@@ -76,12 +77,15 @@ const ActivatedTablesManager: React.FC = () => {
   const api = {
     get: async (url: string) => {
       const token = localStorage.getItem("token");
-      const response = await fetch(`http://localhost:3001${url}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL.replace("/api", "")}${url}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -91,14 +95,17 @@ const ActivatedTablesManager: React.FC = () => {
     },
     post: async (url: string, data: any) => {
       const token = localStorage.getItem("token");
-      const response = await fetch(`http://localhost:3001${url}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL.replace("/api", "")}${url}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(data),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -108,14 +115,17 @@ const ActivatedTablesManager: React.FC = () => {
     },
     put: async (url: string, data: any) => {
       const token = localStorage.getItem("token");
-      const response = await fetch(`http://localhost:3001${url}`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL.replace("/api", "")}${url}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(data),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -395,7 +405,7 @@ const ActivatedTablesManager: React.FC = () => {
               setSuccess(null);
               setCurrentView("activate");
             }}
-            className="bg-blue-600 hover:bg-blue-700"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             Activar Nueva Tabla
           </Button>
@@ -490,13 +500,11 @@ const ActivatedTablesManager: React.FC = () => {
               setSuccess(null);
               setCurrentView("list");
             }}
-            className="text-gray-600"
+            className="text-white"
           >
             ← Volver
           </Button>
-          <h2 className="text-2xl font-bold text-gray-900">
-            Activar Nueva Tabla
-          </h2>
+          <h2 className="text-2xl font-bold text-white">Activar Nueva Tabla</h2>
         </div>
 
         {error && (

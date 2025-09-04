@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+import { API_CONFIG } from "../config/api";
 import { Button } from "./ui/button";
 
 interface LoginModalProps {
@@ -29,7 +30,7 @@ export function LoginModal({ isOpen, onLogin }: LoginModalProps) {
 
     try {
       const response = await axios.post(
-        "http://localhost:3001/api/auth/login",
+        `${API_CONFIG.BASE_URL}/auth/login`,
         credentials
       );
 

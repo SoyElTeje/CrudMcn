@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Pagination } from "./Pagination";
+import { API_CONFIG } from "../config/api";
 
 interface LogEntry {
   Id: number;
@@ -40,12 +41,15 @@ const LogsViewer: React.FC = () => {
   const api = {
     get: async (url: string) => {
       const token = localStorage.getItem("token");
-      const response = await fetch(`http://localhost:3001${url}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL.replace("/api", "")}${url}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

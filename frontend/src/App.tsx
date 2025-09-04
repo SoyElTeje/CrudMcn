@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { API_CONFIG } from "./config/api";
 import {
   Table,
   TableHeader,
@@ -199,7 +200,7 @@ function App() {
 
   // Configurar axios con interceptor para token
   const api = axios.create({
-    baseURL: "http://localhost:3001",
+    baseURL: API_CONFIG.BASE_URL.replace("/api", ""),
   });
 
   // Agregar interceptor para incluir token en todas las peticiones
@@ -900,30 +901,29 @@ function App() {
       const allTables: TableInfo[] = [];
       for (const db of dbList) {
         // Saltar la base de datos de la aplicación
-        if (db.name === APP_DATABASE) {
-          console.log(`Omitiendo base de datos de la aplicación: ${db.name}`);
+        if (db === APP_DATABASE) {
+          console.log(`Omitiendo base de datos de la aplicación: ${db}`);
           continue;
         }
 
         try {
-          const tablesResponse = await api.get(
-            `/api/databases/${db.name}/tables`
-          );
+          const tablesResponse = await api.get(`/api/databases/${db}/tables`);
           const dbTables = tablesResponse.data.map((table: any) => ({
             ...table,
-            database: db.name,
+            database: db,
           }));
           allTables.push(...dbTables);
         } catch (error: any) {
           // Solo loggear el error, no fallar completamente
           console.warn(
-            `No se pudieron cargar las tablas de ${db.name}: ${
+            `No se pudieron cargar las tablas de ${db}: ${
               error.response?.data?.error || error.message
             }`
           );
           // Continuar con las otras bases de datos
         }
       }
+      console.log("🔍 Debug: Tablas obtenidas:", allTables);
       setTables(allTables);
     } catch (error) {
       console.error("Error fetching accessible databases:", error);
@@ -1001,7 +1001,7 @@ function App() {
 
     try {
       const response = await fetch(
-        `http://localhost:3001/api/databases/${tableData.database}/tables/${tableData.table}/download-template`,
+        `${API_CONFIG.BASE_URL}/databases/${tableData.database}/tables/${tableData.table}/download-template`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -1207,6 +1207,12 @@ function App() {
         ) : (
           <>
             {/* Vista de tarjetas de tablas */}
+            {console.log(
+              "🔍 Debug: Render - tables.length:",
+              tables.length,
+              "showTableCards:",
+              showTableCards
+            )}
             {tables.length > 0 && showTableCards && (
               <div className="bg-card border border-border/50 rounded-xl p-4 sm:p-6 mb-6 sm:mb-8 shadow-lg backdrop-blur-sm">
                 <div className="flex items-center justify-between mb-4 sm:mb-6">

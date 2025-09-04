@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { API_CONFIG } from "../config/api";
 
 interface TrialData {
   database: string;
@@ -16,7 +17,7 @@ export const TrialTable: React.FC = () => {
   useEffect(() => {
     setLoading(true);
     axios
-      .get("http://localhost:3001/api/trial/table")
+      .get(`${API_CONFIG.BASE_URL}/trial/table`)
       .then((res) => {
         setData(res.data);
         setError(null);
