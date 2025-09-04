@@ -1,7 +1,9 @@
 // Configuración de bases de datos permitidas para app_user
 const ALLOWED_DATABASES = [
   "APPDATA", // Base de datos de la aplicación
-  "BI_Editor", // Base de datos de trabajo
+  "BI_Editor",
+  "BI_CENNAVE",
+  "BI_NAVIS", // Base de datos de trabajo
 ];
 
 // Función para verificar si una base de datos está permitida
@@ -19,7 +21,3 @@ module.exports = {
   isDatabaseAllowed,
   getAllowedDatabases,
 };
-
-
-
-
