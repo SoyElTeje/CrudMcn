@@ -25,7 +25,7 @@ async function setupDatabaseCorrect() {
           CREATE TABLE users (
               id INT IDENTITY(1,1) PRIMARY KEY,
               username NVARCHAR(100) UNIQUE NOT NULL,
-              password NVARCHAR(255) NOT NULL,
+              password_hash NVARCHAR(255) NOT NULL,
               is_admin BIT NOT NULL DEFAULT 0,
               created_at DATETIME2 DEFAULT GETDATE(),
               updated_at DATETIME2 DEFAULT GETDATE(),

@@ -59,11 +59,10 @@ app.use((req, res, next) => {
 // Middleware
 app.use(
   cors({
-    origin:
-      process.env.CORS_ORIGIN === "*"
-        ? true
-        : process.env.CORS_ORIGIN || "http://localhost:5173",
-    credentials: true,
+    origin: "*", // Permitir cualquier origen para intranet
+    credentials: false, // Deshabilitar credentials cuando origin es *
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   })
 );
 app.use(express.json());
