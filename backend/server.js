@@ -129,9 +129,9 @@ app.get("/api/databases", authenticateToken, async (req, res) => {
     const activatedTablesService = require("./services/activatedTablesService");
     const userId = req.user.isAdmin ? null : req.user.id;
     const databases = await activatedTablesService.getAllDatabases(userId);
-    
+
     // Extract just the database names
-    const dbNames = databases.map(db => db.DatabaseName);
+    const dbNames = databases.map((db) => db.DatabaseName);
     res.json(dbNames);
   } catch (error) {
     console.error("Error fetching accessible databases:", error);
@@ -348,7 +348,7 @@ app.get(
       const { buildSelectQuery } = require("./utils/queryBuilder");
 
       // Build the query with filters and sorting
-      const query = buildSelectQuery(
+      const query = await buildSelectQuery(
         tableName,
         parsedFilters,
         parsedSort,
@@ -359,71 +359,9 @@ app.get(
 
       const result = await request.query(query);
 
-      // Convertir fechas de ISO a DD/MM/AAAA para el frontend
-      const { formatDateDDMMYYYY } = require("./utils/dateUtils");
-
-      const recordsWithFormattedDates = result.recordset.map((record) => {
-        const formattedRecord = { ...record };
-
-        // Usar el campo FechaIngreso_String si existe, y convertir fechas
-        if (formattedRecord.FechaIngreso_String) {
-          // Convertir YYYY-MM-DD a DD/MM/AAAA
-          const match = formattedRecord.FechaIngreso_String.match(
-            /^(\d{4})-(\d{2})-(\d{2})$/
-          );
-          if (match) {
-            const year = match[1];
-            const month = match[2];
-            const day = match[3];
-            const formattedDate = `${day}/${month}/${year}`;
-            formattedRecord.FechaIngreso = formattedDate;
-          }
-
-          // Eliminar el campo temporal
-          delete formattedRecord.FechaIngreso_String;
-        } else {
-          // Procesar otros campos de fecha si existen
-          Object.keys(formattedRecord).forEach((key) => {
-            const value = formattedRecord[key];
-
-            if (value instanceof Date) {
-              // Es un objeto Date, convertirlo a DD/MM/AAAA
-              formattedRecord[key] = formatDateDDMMYYYY(value);
-            } else if (
-              typeof value === "string" &&
-              value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
-            ) {
-              // Es un string ISO datetime, convertirlo a DD/MM/AAAA HH:MM
-              const date = new Date(value);
-              if (!isNaN(date.getTime())) {
-                const day = date.getDate().toString().padStart(2, "0");
-                const month = (date.getMonth() + 1).toString().padStart(2, "0");
-                const year = date.getFullYear();
-                const hours = date.getHours().toString().padStart(2, "0");
-                const minutes = date.getMinutes().toString().padStart(2, "0");
-                const formattedDateTime = `${day}/${month}/${year} ${hours}:${minutes}`;
-                formattedRecord[key] = formattedDateTime;
-              }
-            } else if (
-              typeof value === "string" &&
-              value.match(/^\d{4}-\d{2}-\d{2}$/)
-            ) {
-              // Es un string ISO date (YYYY-MM-DD), convertirlo a DD/MM/AAAA
-              // Extraer directamente los componentes de la fecha para evitar problemas de zona horaria
-              const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-              if (match) {
-                const year = match[1];
-                const month = match[2];
-                const day = match[3];
-                const formattedDate = `${day}/${month}/${year}`;
-                formattedRecord[key] = formattedDate;
-              }
-            }
-          });
-        }
-
-        return formattedRecord;
-      });
+      // Las fechas ya vienen formateadas desde SQL Server usando FORMAT()
+      // No necesitamos procesamiento adicional
+      const recordsWithFormattedDates = result.recordset;
 
       res.json({
         database: dbName,
