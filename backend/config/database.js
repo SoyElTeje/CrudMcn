@@ -25,7 +25,7 @@ class DatabaseConfig {
    */
   getPoolConfig() {
     const environment = process.env.NODE_ENV || "development";
-    
+
     const baseConfig = {
       server: process.env.DB_SERVER,
       port: parseInt(process.env.DB_PORT, 10) || 1433,
@@ -36,7 +36,8 @@ class DatabaseConfig {
         trustServerCertificate: process.env.DB_TRUST_CERT === "true",
         enableArithAbort: true,
         requestTimeout: parseInt(process.env.DB_REQUEST_TIMEOUT, 10) || 30000,
-        connectionTimeout: parseInt(process.env.DB_CONNECTION_TIMEOUT, 10) || 15000,
+        connectionTimeout:
+          parseInt(process.env.DB_CONNECTION_TIMEOUT, 10) || 15000,
       },
     };
 
@@ -70,12 +71,18 @@ class DatabaseConfig {
         pool: {
           max: parseInt(process.env.DB_POOL_MAX, 10) || 20,
           min: parseInt(process.env.DB_POOL_MIN, 10) || 5,
-          idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT, 10) || 300000, // 5 minutos
-          acquireTimeoutMillis: parseInt(process.env.DB_ACQUIRE_TIMEOUT, 10) || 60000,
-          createTimeoutMillis: parseInt(process.env.DB_CREATE_TIMEOUT, 10) || 30000,
-          destroyTimeoutMillis: parseInt(process.env.DB_DESTROY_TIMEOUT, 10) || 5000,
-          reapIntervalMillis: parseInt(process.env.DB_REAP_INTERVAL, 10) || 1000,
-          createRetryIntervalMillis: parseInt(process.env.DB_CREATE_RETRY_INTERVAL, 10) || 200,
+          idleTimeoutMillis:
+            parseInt(process.env.DB_IDLE_TIMEOUT, 10) || 300000, // 5 minutos
+          acquireTimeoutMillis:
+            parseInt(process.env.DB_ACQUIRE_TIMEOUT, 10) || 60000,
+          createTimeoutMillis:
+            parseInt(process.env.DB_CREATE_TIMEOUT, 10) || 30000,
+          destroyTimeoutMillis:
+            parseInt(process.env.DB_DESTROY_TIMEOUT, 10) || 5000,
+          reapIntervalMillis:
+            parseInt(process.env.DB_REAP_INTERVAL, 10) || 1000,
+          createRetryIntervalMillis:
+            parseInt(process.env.DB_CREATE_RETRY_INTERVAL, 10) || 200,
         },
       },
     };
@@ -99,30 +106,37 @@ class DatabaseConfig {
 
     for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
       try {
-        logger.database(`Intentando conectar a ${databaseName} (intento ${attempt}/${this.retryAttempts})`);
-        
+        logger.database(
+          `Intentando conectar a ${databaseName} (intento ${attempt}/${this.retryAttempts})`
+        );
+
         const pool = new sql.ConnectionPool(config);
         await pool.connect();
-        
+
         // Configurar event listeners para monitoreo
         this.setupPoolEventListeners(pool, databaseName);
-        
+
         logger.database(`✅ Conectado exitosamente a ${databaseName}`, {
           database: databaseName,
           attempt,
           poolConfig: config.pool,
         });
-        
+
         return pool;
       } catch (error) {
-        logger.database(`❌ Error conectando a ${databaseName} (intento ${attempt}/${this.retryAttempts})`, {
-          database: databaseName,
-          attempt,
-          error: error.message,
-        });
+        logger.database(
+          `❌ Error conectando a ${databaseName} (intento ${attempt}/${this.retryAttempts})`,
+          {
+            database: databaseName,
+            attempt,
+            error: error.message,
+          }
+        );
 
         if (attempt === this.retryAttempts) {
-          throw new Error(`No se pudo conectar a ${databaseName} después de ${this.retryAttempts} intentos: ${error.message}`);
+          throw new Error(
+            `No se pudo conectar a ${databaseName} después de ${this.retryAttempts} intentos: ${error.message}`
+          );
         }
 
         // Esperar antes del siguiente intento
@@ -167,7 +181,7 @@ class DatabaseConfig {
   async getPool(databaseName) {
     // Si no se proporciona nombre, usar el de la variable de entorno
     const dbName = databaseName || process.env.DB_DATABASE;
-    
+
     if (!dbName) {
       throw new Error("Nombre de base de datos es requerido");
     }
@@ -175,7 +189,7 @@ class DatabaseConfig {
     // Verificar si el pool ya existe y está conectado
     if (this.pools.has(dbName)) {
       const existingPool = this.pools.get(dbName);
-      
+
       if (existingPool.connected) {
         return existingPool;
       } else {
@@ -187,7 +201,7 @@ class DatabaseConfig {
     // Crear nuevo pool
     const pool = await this.createPool(dbName);
     this.pools.set(dbName, pool);
-    
+
     return pool;
   }
 
@@ -198,7 +212,7 @@ class DatabaseConfig {
   async closePool(databaseName) {
     if (this.pools.has(databaseName)) {
       const pool = this.pools.get(databaseName);
-      
+
       try {
         await pool.close();
         this.pools.delete(databaseName);
@@ -216,10 +230,10 @@ class DatabaseConfig {
    * Cierra todos los pools de conexiones
    */
   async closeAllPools() {
-    const closePromises = Array.from(this.pools.keys()).map(databaseName => 
+    const closePromises = Array.from(this.pools.keys()).map((databaseName) =>
       this.closePool(databaseName)
     );
-    
+
     await Promise.all(closePromises);
     logger.database("Todos los pools de conexión cerrados");
   }
@@ -230,7 +244,7 @@ class DatabaseConfig {
    */
   getPoolStats() {
     const stats = {};
-    
+
     for (const [databaseName, pool] of this.pools) {
       stats[databaseName] = {
         connected: pool.connected,
@@ -240,7 +254,7 @@ class DatabaseConfig {
         pendingRequests: pool.pendingRequests,
       };
     }
-    
+
     return stats;
   }
 
@@ -253,16 +267,18 @@ class DatabaseConfig {
     }
 
     this.isHealthCheckRunning = true;
-    
+
     setInterval(async () => {
       try {
         const stats = this.getPoolStats();
         logger.database("Health check de pools", { stats });
-        
+
         // Verificar pools desconectados
         for (const [databaseName, pool] of this.pools) {
           if (!pool.connected) {
-            logger.database(`Pool de ${databaseName} desconectado, reintentando conexión`);
+            logger.database(
+              `Pool de ${databaseName} desconectado, reintentando conexión`
+            );
             this.pools.delete(databaseName);
           }
         }
@@ -287,7 +303,7 @@ class DatabaseConfig {
    * @returns {Promise} Promise que se resuelve después del delay
    */
   delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
 
