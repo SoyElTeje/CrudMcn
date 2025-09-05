@@ -6,6 +6,30 @@
 .env.production
 .env.*.local
 
+# Backend environment files
+backend/.env
+backend/.env.local
+backend/.env.development
+backend/.env.production
+backend/.env.staging
+
+# Frontend environment files
+frontend/.env
+frontend/.env.local
+frontend/.env.development
+frontend/.env.production
+frontend/.env.staging
+
+# Environment templates (keep these in repo)
+# backend/env.development
+# backend/env.production
+# backend/env.staging
+# backend/env.local
+# frontend/env.development
+# frontend/env.production
+# frontend/env.staging
+# frontend/env.local
+
 # Dependencies
 node_modules/
 */node_modules/

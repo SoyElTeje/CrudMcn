@@ -12,7 +12,7 @@ const logger = require("../config/logger");
  */
 const PERMISSION_TYPES = {
   READ: "READ",
-  WRITE: "WRITE", 
+  WRITE: "WRITE",
   DELETE: "DELETE",
   CREATE: "CREATE",
 };
@@ -64,7 +64,9 @@ const requirePermission = (permissionType, databaseName, tableName = null) => {
         });
 
         throw new AppError(
-          `No tienes permisos de ${permissionType} en ${databaseName}${tableName ? `.${tableName}` : ""}`,
+          `No tienes permisos de ${permissionType} en ${databaseName}${
+            tableName ? `.${tableName}` : ""
+          }`,
           403,
           "INSUFFICIENT_PERMISSIONS"
         );
@@ -161,7 +163,9 @@ const requireAllPermissions = (permissions) => {
           });
 
           throw new AppError(
-            `No tienes permisos de ${permission.type} en ${permission.databaseName}${permission.tableName ? `.${permission.tableName}` : ""}`,
+            `No tienes permisos de ${permission.type} en ${
+              permission.databaseName
+            }${permission.tableName ? `.${permission.tableName}` : ""}`,
             403,
             "INSUFFICIENT_PERMISSIONS"
           );
@@ -255,7 +259,7 @@ const requireDynamicPermission = (permissionResolver) => {
 
       // Resolver permisos dinámicamente
       const permission = permissionResolver(req);
-      
+
       if (!permission) {
         throw new AppError(
           "No se pudo resolver el permiso requerido",
@@ -281,7 +285,9 @@ const requireDynamicPermission = (permissionResolver) => {
         });
 
         throw new AppError(
-          `No tienes permisos de ${permission.type} en ${permission.databaseName}${permission.tableName ? `.${permission.tableName}` : ""}`,
+          `No tienes permisos de ${permission.type} en ${
+            permission.databaseName
+          }${permission.tableName ? `.${permission.tableName}` : ""}`,
           403,
           "INSUFFICIENT_PERMISSIONS"
         );
@@ -307,11 +313,15 @@ const requireDynamicPermission = (permissionResolver) => {
  * @param {string} permissionType - Tipo de permiso
  * @returns {Function} Resolver de permisos
  */
-const createPermissionResolver = (databaseParam, tableParam, permissionType) => {
+const createPermissionResolver = (
+  databaseParam,
+  tableParam,
+  permissionType
+) => {
   return (req) => {
     const databaseName = req.params[databaseParam];
     const tableName = req.params[tableParam];
-    
+
     if (!databaseName) {
       return null;
     }

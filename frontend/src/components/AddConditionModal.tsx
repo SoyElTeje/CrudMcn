@@ -9,6 +9,7 @@ import {
 } from "./ui/select";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import DateInput from "./ui/DateInput";
 // Removed unused Checkbox import
 
 interface ColumnStructure {
@@ -137,23 +138,23 @@ const AddConditionModal: React.FC<AddConditionModalProps> = ({
         if (selectedColumnData?.DataType.toLowerCase().includes("date")) {
           return (
             <div className="space-y-2">
-              <Label htmlFor="minDate">Fecha mínima</Label>
-              <Input
+              <DateInput
                 id="minDate"
-                type="date"
+                label="Fecha mínima"
                 value={conditionValue.min || ""}
-                onChange={(e) =>
-                  setConditionValue({ ...conditionValue, min: e.target.value })
+                onChange={(value) =>
+                  setConditionValue({ ...conditionValue, min: value })
                 }
+                placeholder="DD/MM/AAAA"
               />
-              <Label htmlFor="maxDate">Fecha máxima</Label>
-              <Input
+              <DateInput
                 id="maxDate"
-                type="date"
+                label="Fecha máxima"
                 value={conditionValue.max || ""}
-                onChange={(e) =>
-                  setConditionValue({ ...conditionValue, max: e.target.value })
+                onChange={(value) =>
+                  setConditionValue({ ...conditionValue, max: value })
                 }
+                placeholder="DD/MM/AAAA"
               />
             </div>
           );
