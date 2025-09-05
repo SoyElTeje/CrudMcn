@@ -1,45 +1,83 @@
-const sql = require("mssql");
-require("dotenv").config();
+/**
+ * Módulo de conexión a base de datos optimizado
+ * Utiliza la nueva configuración de pool con clean code
+ */
 
-const baseConfig = {
-  server: process.env.DB_SERVER,
-  port: parseInt(process.env.DB_PORT, 10),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  options: {
-    encrypt: false, // Set to true if using Azure
-    trustServerCertificate: true,
-  },
-  pool: {
-    max: 10,
-    min: 0,
-    idleTimeoutMillis: 30000,
-  },
-};
+const { databaseConfig, sql } = require("./config/database");
+const logger = require("./config/logger");
 
-const pools = {};
-
+/**
+ * Obtiene un pool de conexiones para la base de datos especificada
+ * @param {string} dbName - Nombre de la base de datos
+ * @returns {Promise<sql.ConnectionPool>} Pool de conexiones
+ */
 async function getPool(dbName = process.env.DB_DATABASE) {
-  if (pools[dbName]) {
-    return pools[dbName];
-  }
-
-  const config = {
-    ...baseConfig,
-    database: dbName,
-  };
-
   try {
-    // Create a new connection pool for this specific database
-    const pool = new sql.ConnectionPool(config);
-    await pool.connect();
-    pools[dbName] = pool;
-    console.log(`✅ Connected to database: ${dbName}`);
-    return pool;
-  } catch (err) {
-    console.error(`❌ Error connecting to database ${dbName}:`, err);
-    throw err;
+    return await databaseConfig.getPool(dbName);
+  } catch (error) {
+    logger.database(`Error obteniendo pool para ${dbName}`, {
+      database: dbName,
+      error: error.message,
+    });
+    throw error;
   }
 }
 
-module.exports = { getPool, sql };
+/**
+ * Cierra un pool específico
+ * @param {string} dbName - Nombre de la base de datos
+ */
+async function closePool(dbName) {
+  try {
+    await databaseConfig.closePool(dbName);
+  } catch (error) {
+    logger.database(`Error cerrando pool para ${dbName}`, {
+      database: dbName,
+      error: error.message,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Cierra todos los pools de conexiones
+ */
+async function closeAllPools() {
+  try {
+    await databaseConfig.closeAllPools();
+  } catch (error) {
+    logger.database("Error cerrando todos los pools", {
+      error: error.message,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Obtiene estadísticas de los pools
+ * @returns {Object} Estadísticas de los pools
+ */
+function getPoolStats() {
+  return databaseConfig.getPoolStats();
+}
+
+// Manejar cierre graceful de la aplicación
+process.on("SIGINT", async () => {
+  logger.database("Cerrando pools de conexión...");
+  await closeAllPools();
+  process.exit(0);
+});
+
+process.on("SIGTERM", async () => {
+  logger.database("Cerrando pools de conexión...");
+  await closeAllPools();
+  process.exit(0);
+});
+
+module.exports = {
+  getPool,
+  closePool,
+  closeAllPools,
+  getPoolStats,
+  sql,
+};

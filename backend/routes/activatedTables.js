@@ -2,6 +2,9 @@ const express = require("express");
 const router = express.Router();
 const activatedTablesService = require("../services/activatedTablesService");
 const { authenticateToken, requireAdmin } = require("../middleware/auth");
+const { catchAsync, AppError } = require("../middleware/errorHandler");
+const { validate, schemas } = require("../middleware/validation");
+const logger = require("../config/logger");
 
 // Obtener todas las bases de datos disponibles (excluyendo APPDATA) (solo admin)
 router.get("/databases", authenticateToken, requireAdmin, async (req, res) => {
@@ -76,15 +79,13 @@ router.get(
 );
 
 // Activar una tabla (solo admin)
-router.post("/activate", authenticateToken, requireAdmin, async (req, res) => {
-  try {
+router.post(
+  "/activate",
+  authenticateToken,
+  requireAdmin,
+  validate(schemas.activateTable),
+  catchAsync(async (req, res) => {
     const { databaseName, tableName, description, conditions } = req.body;
-
-    if (!databaseName || !tableName) {
-      return res
-        .status(400)
-        .json({ error: "DatabaseName y TableName son requeridos" });
-    }
 
     // Activar la tabla
     const activatedTableId = await activatedTablesService.activateTable(
@@ -103,37 +104,44 @@ router.post("/activate", authenticateToken, requireAdmin, async (req, res) => {
       );
     }
 
+    logger.crud("CREATE", "activated_tables", {
+      adminId: req.user.id,
+      databaseName,
+      tableName,
+      activatedTableId,
+      conditionsCount: conditions ? conditions.length : 0,
+    });
+
     res.json({
       success: true,
       message: "Tabla activada correctamente",
       activatedTableId,
     });
-  } catch (error) {
-    console.error("Error activando tabla:", error);
-    res.status(500).json({ error: "Error interno del servidor" });
-  }
-});
+  })
+);
 
 // Desactivar una tabla (solo admin)
 router.post(
   "/deactivate/:databaseName/:tableName",
   authenticateToken,
   requireAdmin,
-  async (req, res) => {
-    try {
-      const { databaseName, tableName } = req.params;
+  validate(schemas.databaseTableParams, "params"),
+  catchAsync(async (req, res) => {
+    const { databaseName, tableName } = req.params;
 
-      await activatedTablesService.deactivateTable(databaseName, tableName);
+    await activatedTablesService.deactivateTable(databaseName, tableName);
 
-      res.json({
-        success: true,
-        message: "Tabla desactivada correctamente",
-      });
-    } catch (error) {
-      console.error("Error desactivando tabla:", error);
-      res.status(500).json({ error: "Error interno del servidor" });
-    }
-  }
+    logger.crud("DELETE", "activated_tables", {
+      adminId: req.user.id,
+      databaseName,
+      tableName,
+    });
+
+    res.json({
+      success: true,
+      message: "Tabla desactivada correctamente",
+    });
+  })
 );
 
 // Obtener condiciones de una tabla activada por database y table name (solo admin)
@@ -239,39 +247,41 @@ router.put(
 router.post(
   "/validate/:databaseName/:tableName",
   authenticateToken,
-  async (req, res) => {
-    try {
-      const { databaseName, tableName } = req.params;
-      const { data } = req.body;
+  validate(schemas.databaseTableParams, "params"),
+  validate(schemas.tableData),
+  catchAsync(async (req, res) => {
+    const { databaseName, tableName } = req.params;
+    const { data } = req.body;
 
-      if (!data) {
-        return res.status(400).json({ error: "Data es requerido" });
-      }
-
-      // Verificar si la tabla está activada
-      const isActivated = await activatedTablesService.isTableActivated(
-        databaseName,
-        tableName
+    // Verificar si la tabla está activada
+    const isActivated = await activatedTablesService.isTableActivated(
+      databaseName,
+      tableName
+    );
+    if (!isActivated) {
+      throw new AppError(
+        "Esta tabla no está disponible para operaciones de escritura",
+        403,
+        "TABLE_NOT_ACTIVATED"
       );
-      if (!isActivated) {
-        return res.status(403).json({
-          error: "Esta tabla no está disponible para operaciones de escritura",
-        });
-      }
-
-      // Validar los datos
-      const validation = await activatedTablesService.validateTableData(
-        databaseName,
-        tableName,
-        data
-      );
-
-      res.json(validation);
-    } catch (error) {
-      console.error("Error validando datos de tabla:", error);
-      res.status(500).json({ error: "Error interno del servidor" });
     }
-  }
+
+    // Validar los datos
+    const validation = await activatedTablesService.validateTableData(
+      databaseName,
+      tableName,
+      data
+    );
+
+    logger.crud("VALIDATE", `${databaseName}.${tableName}`, {
+      userId: req.user.id,
+      databaseName,
+      tableName,
+      validationResult: validation.isValid,
+    });
+
+    res.json(validation);
+  })
 );
 
 module.exports = router;

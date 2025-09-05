@@ -4,7 +4,7 @@ const cors = require("cors");
 const fs = require("fs");
 const { getPool } = require("./db");
 const authRoutes = require("./routes/auth");
-
+const healthRoutes = require("./routes/health");
 const logsRoutes = require("./routes/logs");
 const activatedTablesRoutes = require("./routes/activatedTables");
 
@@ -28,6 +28,10 @@ const {
 const upload = require("./middleware/upload");
 const excelService = require("./services/excelService");
 
+// Importar manejo global de errores y logging
+const { errorHandler, notFound } = require("./middleware/errorHandler");
+const logger = require("./config/logger");
+
 require("dotenv").config();
 
 const app = express();
@@ -35,6 +39,22 @@ const PORT = process.env.PORT || 3001;
 
 // Importar el servicio de autenticación para crear el admin por defecto
 const authService = require("./services/authService");
+
+// Middleware de logging de requests
+app.use((req, res, next) => {
+  const start = Date.now();
+
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    logger.api(req.method, req.originalUrl, res.statusCode, duration, {
+      userAgent: req.get("User-Agent"),
+      ip: req.ip || req.connection.remoteAddress,
+      userId: req.user?.id || null,
+    });
+  });
+
+  next();
+});
 
 // Middleware
 app.use(
@@ -60,6 +80,9 @@ app.use("/api", (req, res, next) => {
 
 // Rutas de autenticación (sin middleware de autenticación)
 app.use("/api/auth", authRoutes);
+
+// Rutas de health check
+app.use("/api/health", healthRoutes);
 
 // Rutas de logs
 app.use("/api/logs", logsRoutes);
@@ -1523,22 +1546,29 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// Manejo de rutas no encontradas (debe ir antes del catch-all)
+app.all("*", notFound);
+
+// Manejo global de errores (debe ir al final)
+app.use(errorHandler);
+
 // Inicializar el usuario admin por defecto
 authService
   .createDefaultAdmin()
   .then(() => {
-    console.log("✅ Usuario admin inicializado");
+    logger.info("✅ Usuario admin inicializado");
   })
   .catch((error) => {
-    console.error("❌ Error inicializando usuario admin:", error);
+    logger.error("❌ Error inicializando usuario admin:", error);
   });
 
+// Catch-all handler para servir el frontend (debe ir después del manejo de errores)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "frontend", "dist", "index.html"));
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Trial endpoint: http://localhost:${PORT}/api/trial/table`);
-  console.log(`🔍 Health check: http://localhost:${PORT}/api/health`);
+  logger.info(`🚀 Server running on port ${PORT}`);
+  logger.info(`📊 Trial endpoint: http://localhost:${PORT}/api/trial/table`);
+  logger.info(`🔍 Health check: http://localhost:${PORT}/api/health`);
 });
