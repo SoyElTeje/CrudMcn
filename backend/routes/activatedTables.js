@@ -6,10 +6,13 @@ const { catchAsync, AppError } = require("../middleware/errorHandler");
 const { validate, schemas } = require("../middleware/validation");
 const logger = require("../config/logger");
 
-// Obtener todas las bases de datos disponibles (excluyendo APPDATA) (solo admin)
-router.get("/databases", authenticateToken, requireAdmin, async (req, res) => {
+// Obtener todas las bases de datos disponibles para el usuario
+router.get("/databases", authenticateToken, async (req, res) => {
   try {
-    const databases = await activatedTablesService.getAllDatabases();
+    // Si es admin, obtener todas las bases de datos
+    // Si no es admin, obtener solo las que tiene permisos
+    const userId = req.user.isAdmin ? null : req.user.id;
+    const databases = await activatedTablesService.getAllDatabases(userId);
     res.json(databases);
   } catch (error) {
     console.error("Error obteniendo bases de datos:", error);
@@ -36,10 +39,13 @@ router.get(
   }
 );
 
-// Obtener todas las tablas disponibles (solo admin)
-router.get("/all-tables", authenticateToken, requireAdmin, async (req, res) => {
+// Obtener todas las tablas disponibles para el usuario
+router.get("/all-tables", authenticateToken, async (req, res) => {
   try {
-    const tables = await activatedTablesService.getAllTables();
+    // Si es admin, obtener todas las tablas
+    // Si no es admin, obtener solo las de bases de datos con permisos
+    const userId = req.user.isAdmin ? null : req.user.id;
+    const tables = await activatedTablesService.getAllTables(userId);
     res.json(tables);
   } catch (error) {
     console.error("Error obteniendo todas las tablas:", error);
