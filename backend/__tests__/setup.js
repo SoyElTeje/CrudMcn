@@ -47,6 +47,73 @@ jest.mock("../db", () => ({
   getPoolStats: jest.fn(),
 }));
 
+// Mock de mssql
+jest.mock("mssql", () => ({
+  connect: jest.fn(),
+  close: jest.fn(),
+  Request: jest.fn().mockImplementation(() => ({
+    input: jest.fn().mockReturnThis(),
+    query: jest.fn().mockResolvedValue({ recordset: [], rowsAffected: [1] }),
+    execute: jest.fn().mockResolvedValue({ recordset: [], rowsAffected: [1] }),
+  })),
+  ConnectionPool: jest.fn().mockImplementation(() => ({
+    connect: jest.fn().mockResolvedValue({}),
+    close: jest.fn().mockResolvedValue({}),
+    request: jest.fn().mockReturnValue({
+      input: jest.fn().mockReturnThis(),
+      query: jest.fn().mockResolvedValue({ recordset: [], rowsAffected: [1] }),
+      execute: jest.fn().mockResolvedValue({ recordset: [], rowsAffected: [1] }),
+    }),
+  })),
+}));
+
+// Mock de bcrypt
+jest.mock("bcrypt", () => ({
+  hash: jest.fn().mockResolvedValue("hashed_password"),
+  compare: jest.fn().mockResolvedValue(true),
+  genSalt: jest.fn().mockResolvedValue("salt"),
+}));
+
+// Mock de jsonwebtoken
+jest.mock("jsonwebtoken", () => ({
+  sign: jest.fn().mockReturnValue("mock_jwt_token"),
+  verify: jest.fn().mockReturnValue({ userId: 1, username: "test_user" }),
+  decode: jest.fn().mockReturnValue({ userId: 1, username: "test_user" }),
+}));
+
+// Mock de express-rate-limit
+jest.mock("express-rate-limit", () => ({
+  rateLimit: jest.fn().mockReturnValue((req, res, next) => next()),
+}));
+
+// Mock de helmet
+jest.mock("helmet", () => jest.fn().mockReturnValue((req, res, next) => next()));
+
+// Mock de multer
+jest.mock("multer", () => ({
+  memoryStorage: jest.fn().mockReturnValue({}),
+  diskStorage: jest.fn().mockReturnValue({}),
+}));
+
+// Mock de database config
+jest.mock("../config/database", () => ({
+  getPool: jest.fn().mockResolvedValue({
+    request: jest.fn().mockReturnValue({
+      input: jest.fn().mockReturnThis(),
+      query: jest.fn().mockResolvedValue({ recordset: [], rowsAffected: [1] }),
+      execute: jest.fn().mockResolvedValue({ recordset: [], rowsAffected: [1] }),
+    }),
+    close: jest.fn().mockResolvedValue({}),
+  }),
+  closePool: jest.fn().mockResolvedValue({}),
+  closeAllPools: jest.fn().mockResolvedValue({}),
+  getPoolStats: jest.fn().mockReturnValue({
+    totalConnections: 0,
+    activeConnections: 0,
+    idleConnections: 0,
+  }),
+}));
+
 // Configurar cleanup después de cada test
 afterEach(() => {
   jest.clearAllMocks();

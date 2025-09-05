@@ -61,7 +61,7 @@ module.exports = {
   testTimeout: 10000,
   
   // Configuración de módulos
-  moduleNameMapping: {
+  moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1"
   },
   

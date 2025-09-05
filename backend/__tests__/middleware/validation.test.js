@@ -67,7 +67,7 @@ describe("Validation Middleware", () => {
     it("debería validar datos de params correctamente", () => {
       // Arrange
       req.params = {
-        userId: "123"
+        id: "123"
       };
 
       const middleware = validate(schemas.userId, "params");
@@ -116,7 +116,7 @@ describe("Validation Middleware", () => {
 
         const { error } = schemas.login.validate(invalidData);
         expect(error).toBeDefined();
-        expect(error.details[0].message).toContain("username");
+        expect(error.details[0].message).toContain("nombre de usuario");
       });
 
       it("debería rechazar login con password muy corto", () => {
@@ -127,7 +127,7 @@ describe("Validation Middleware", () => {
 
         const { error } = schemas.login.validate(invalidData);
         expect(error).toBeDefined();
-        expect(error.details[0].message).toContain("password");
+        expect(error.details[0].message).toContain("contraseña");
       });
     });
 
@@ -152,7 +152,7 @@ describe("Validation Middleware", () => {
 
         const { error } = schemas.createUser.validate(invalidData);
         expect(error).toBeDefined();
-        expect(error.details[0].message).toContain("username");
+        expect(error.details[0].message).toContain("nombre de usuario");
       });
     });
 
@@ -173,7 +173,7 @@ describe("Validation Middleware", () => {
 
         const { error } = schemas.updatePassword.validate(invalidData);
         expect(error).toBeDefined();
-        expect(error.details[0].message).toContain("newPassword");
+        expect(error.details[0].message).toContain("contraseña");
       });
     });
 
@@ -181,12 +181,7 @@ describe("Validation Middleware", () => {
       it("debería validar asignación de permisos de BD correcta", () => {
         const validData = {
           databaseName: "test_database",
-          permissions: {
-            canRead: true,
-            canWrite: false,
-            canDelete: false,
-            canCreate: true
-          }
+          permissions: ["read", "create"]
         };
 
         const { error } = schemas.assignDatabasePermission.validate(validData);
@@ -195,18 +190,13 @@ describe("Validation Middleware", () => {
 
       it("debería rechazar nombre de BD inválido", () => {
         const invalidData = {
-          databaseName: "test-database!", // Caracteres especiales
-          permissions: {
-            canRead: true,
-            canWrite: false,
-            canDelete: false,
-            canCreate: true
-          }
+          databaseName: "", // Nombre vacío
+          permissions: ["read", "write"]
         };
 
         const { error } = schemas.assignDatabasePermission.validate(invalidData);
         expect(error).toBeDefined();
-        expect(error.details[0].message).toContain("databaseName");
+        expect(error.details[0].message).toContain("base de datos");
       });
     });
 
@@ -215,12 +205,7 @@ describe("Validation Middleware", () => {
         const validData = {
           databaseName: "test_database",
           tableName: "test_table",
-          permissions: {
-            canRead: true,
-            canWrite: true,
-            canDelete: false,
-            canCreate: false
-          }
+          permissions: ["read", "write"]
         };
 
         const { error } = schemas.assignTablePermission.validate(validData);
@@ -230,25 +215,20 @@ describe("Validation Middleware", () => {
       it("debería rechazar nombre de tabla inválido", () => {
         const invalidData = {
           databaseName: "test_database",
-          tableName: "test-table!", // Caracteres especiales
-          permissions: {
-            canRead: true,
-            canWrite: true,
-            canDelete: false,
-            canCreate: false
-          }
+          tableName: "", // Nombre vacío
+          permissions: ["read", "write"]
         };
 
         const { error } = schemas.assignTablePermission.validate(invalidData);
         expect(error).toBeDefined();
-        expect(error.details[0].message).toContain("tableName");
+        expect(error.details[0].message).toContain("tabla");
       });
     });
 
     describe("userId schema", () => {
       it("debería validar ID de usuario correcto", () => {
         const validData = {
-          userId: "123"
+          id: "123"
         };
 
         const { error } = schemas.userId.validate(validData);
@@ -257,12 +237,12 @@ describe("Validation Middleware", () => {
 
       it("debería rechazar ID de usuario no numérico", () => {
         const invalidData = {
-          userId: "abc"
+          id: "abc"
         };
 
         const { error } = schemas.userId.validate(invalidData);
         expect(error).toBeDefined();
-        expect(error.details[0].message).toContain("userId");
+        expect(error.details[0].message).toContain("ID");
       });
     });
 
@@ -285,7 +265,7 @@ describe("Validation Middleware", () => {
 
         const { error } = schemas.pagination.validate(invalidData);
         expect(error).toBeDefined();
-        expect(error.details[0].message).toContain("page");
+        expect(error.details[0].message).toContain("página");
       });
 
       it("debería rechazar límite muy alto", () => {
@@ -296,15 +276,15 @@ describe("Validation Middleware", () => {
 
         const { error } = schemas.pagination.validate(invalidData);
         expect(error).toBeDefined();
-        expect(error.details[0].message).toContain("limit");
+        expect(error.details[0].message).toContain("límite");
       });
     });
 
     describe("dateFilter schema", () => {
       it("debería validar filtro de fecha correcto", () => {
         const validData = {
-          startDate: "01/01/2024",
-          endDate: "31/12/2024"
+          startDate: "2024-01-01",
+          endDate: "2024-12-31"
         };
 
         const { error } = schemas.dateFilter.validate(validData);
@@ -313,13 +293,13 @@ describe("Validation Middleware", () => {
 
       it("debería rechazar formato de fecha incorrecto", () => {
         const invalidData = {
-          startDate: "2024-01-01", // Formato ISO
-          endDate: "31/12/2024"
+          startDate: "01/01/2024", // Formato DD/MM/AAAA inválido
+          endDate: "2024-12-31"
         };
 
         const { error } = schemas.dateFilter.validate(invalidData);
         expect(error).toBeDefined();
-        expect(error.details[0].message).toContain("startDate");
+        expect(error.details[0].message).toContain("fecha");
       });
     });
 
