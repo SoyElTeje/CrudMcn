@@ -7,22 +7,39 @@ const {
 
 class ActivatedTablesService {
   /**
-   * Obtiene todas las bases de datos disponibles (solo las permitidas)
+   * Obtiene todas las bases de datos disponibles para un usuario específico
    */
-  async getAllDatabases() {
+  async getAllDatabases(userId = null) {
     try {
-      // Importar configuración de bases de datos permitidas
-      const { getAllowedDatabases } = require("../config/allowedDatabases");
+      const pool = await getPool();
 
-      // Obtener solo las bases de datos permitidas
-      const allowedDatabases = getAllowedDatabases();
+      if (userId) {
+        // Obtener bases de datos a las que el usuario tiene permisos
+        const query = `
+          SELECT DISTINCT database_name as DatabaseName
+          FROM user_permissions 
+          WHERE user_id = @userId
+          ORDER BY database_name
+        `;
 
-      // Convertir a formato esperado
-      const databases = allowedDatabases.map((dbName) => ({
-        DatabaseName: dbName,
-      }));
+        const result = await pool
+          .request()
+          .input("userId", userId)
+          .query(query);
 
-      return databases;
+        return result.recordset;
+      } else {
+        // Si no se especifica usuario, obtener todas las bases de datos del servidor
+        const query = `
+          SELECT name as DatabaseName
+          FROM sys.databases 
+          WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb')
+          ORDER BY name
+        `;
+
+        const result = await pool.request().query(query);
+        return result.recordset;
+      }
     } catch (error) {
       console.error("Error obteniendo bases de datos:", error);
       throw error;
@@ -54,35 +71,52 @@ class ActivatedTablesService {
   }
 
   /**
-   * Obtiene todas las tablas disponibles (solo de bases de datos permitidas)
+   * Obtiene todas las tablas disponibles para un usuario específico
    */
-  async getAllTables() {
+  async getAllTables(userId = null) {
     try {
       const pool = await getPool();
 
-      // Importar configuración de bases de datos permitidas
-      const { getAllowedDatabases } = require("../config/allowedDatabases");
-      const allowedDatabases = getAllowedDatabases();
+      if (userId) {
+        // Obtener tablas de bases de datos a las que el usuario tiene permisos
+        const query = `
+          SELECT DISTINCT 
+            up.database_name as DatabaseName,
+            t.TABLE_NAME as TableName,
+            t.TABLE_SCHEMA as SchemaName
+          FROM user_permissions up
+          CROSS APPLY (
+            SELECT TABLE_NAME, TABLE_SCHEMA
+            FROM INFORMATION_SCHEMA.TABLES 
+            WHERE TABLE_CATALOG = up.database_name 
+            AND TABLE_TYPE = 'BASE TABLE'
+          ) t
+          WHERE up.user_id = @userId
+          ORDER BY up.database_name, t.TABLE_NAME
+        `;
 
-      // Construir la lista de bases de datos permitidas para la consulta SQL
-      const allowedDatabasesList = allowedDatabases
-        .map((db) => `'${db}'`)
-        .join(",");
+        const result = await pool
+          .request()
+          .input("userId", userId)
+          .query(query);
 
-      // Obtener todas las tablas de las bases de datos permitidas
-      const query = `
-        SELECT 
-          TABLE_CATALOG as DatabaseName,
-          TABLE_NAME as TableName,
-          TABLE_SCHEMA as SchemaName
-        FROM INFORMATION_SCHEMA.TABLES 
-        WHERE TABLE_TYPE = 'BASE TABLE'
-        AND TABLE_CATALOG IN (${allowedDatabasesList})
-        ORDER BY TABLE_CATALOG, TABLE_NAME
-      `;
+        return result.recordset;
+      } else {
+        // Si no se especifica usuario, obtener todas las tablas de todas las bases de datos
+        const query = `
+          SELECT 
+            TABLE_CATALOG as DatabaseName,
+            TABLE_NAME as TableName,
+            TABLE_SCHEMA as SchemaName
+          FROM INFORMATION_SCHEMA.TABLES 
+          WHERE TABLE_TYPE = 'BASE TABLE'
+          AND TABLE_CATALOG NOT IN ('master', 'tempdb', 'model', 'msdb')
+          ORDER BY TABLE_CATALOG, TABLE_NAME
+        `;
 
-      const result = await pool.request().query(query);
-      return result.recordset;
+        const result = await pool.request().query(query);
+        return result.recordset;
+      }
     } catch (error) {
       console.error("Error obteniendo todas las tablas:", error);
       throw error;
