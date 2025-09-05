@@ -17,7 +17,9 @@ module.exports = {
   testPathIgnorePatterns: [
     "/node_modules/",
     "/logs/",
-    "/dist/"
+    "/dist/",
+    "/__tests__/setup.js",
+    "/__tests__/run-tests.js"
   ],
   
   // Configuración de coverage

@@ -19,10 +19,6 @@ const {
 const authService = require("../../services/authServiceRefactored");
 const { AppError } = require("../../middleware/errorHandler");
 
-// Mock de dependencias
-jest.mock("../../services/authServiceRefactored");
-jest.mock("../../middleware/errorHandler");
-
 describe("Permissions Middleware", () => {
   let req, res, next;
 

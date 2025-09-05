@@ -114,6 +114,25 @@ jest.mock("../config/database", () => ({
   }),
 }));
 
+// Mock de authService
+jest.mock("../services/authServiceRefactored", () => ({
+  verifyCredentials: jest.fn(),
+  getUserByUsername: jest.fn(),
+  determineAdminStatus: jest.fn(),
+  hasAdminColumn: jest.fn(),
+  generateToken: jest.fn(),
+  verifyToken: jest.fn(),
+  createUser: jest.fn(),
+  updateUserPassword: jest.fn(),
+  getAllUsers: jest.fn(),
+  deleteUser: jest.fn(),
+  createDefaultAdmin: jest.fn(),
+  hasPermission: jest.fn(),
+  assignDatabasePermission: jest.fn(),
+  assignTablePermission: jest.fn(),
+}));
+
+
 // Configurar cleanup después de cada test
 afterEach(() => {
   jest.clearAllMocks();
