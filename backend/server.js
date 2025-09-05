@@ -125,56 +125,14 @@ app.get("/api/trial/table", async (req, res) => {
 // List accessible databases for the user
 app.get("/api/databases", authenticateToken, async (req, res) => {
   try {
-    // If user is admin, return all databases
-    if (req.user.isAdmin) {
-      const pool = await getPool();
-      const dbsResult = await pool
-        .request()
-        .query(
-          "SELECT name FROM sys.databases WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb')"
-        );
-      const dbs = dbsResult.recordset.map((row) => row.name);
-      res.json(dbs);
-      return;
-    }
-
-    // For non-admin users, get databases they have permissions for
-    const pool = await getPool();
-
-    // Get database permissions
-    const dbPermissionsQuery = `
-      SELECT DISTINCT DatabaseName 
-      FROM USER_DATABASE_PERMISSIONS 
-      WHERE UserId = @userId AND CanRead = 1
-    `;
-    const dbPermissionsResult = await pool
-      .request()
-      .input("userId", req.user.id)
-      .query(dbPermissionsQuery);
-
-    // Get table permissions to find databases with table-specific permissions
-    const tablePermissionsQuery = `
-      SELECT DISTINCT DatabaseName 
-      FROM USER_TABLE_PERMISSIONS 
-      WHERE UserId = @userId AND CanRead = 1
-    `;
-    const tablePermissionsResult = await pool
-      .request()
-      .input("userId", req.user.id)
-      .query(tablePermissionsQuery);
-
-    // Combine both sets of databases
-    const accessibleDatabases = new Set();
-
-    dbPermissionsResult.recordset.forEach((row) => {
-      accessibleDatabases.add(row.DatabaseName);
-    });
-
-    tablePermissionsResult.recordset.forEach((row) => {
-      accessibleDatabases.add(row.DatabaseName);
-    });
-
-    res.json(Array.from(accessibleDatabases));
+    // Use the activatedTablesService to get databases based on user permissions
+    const activatedTablesService = require("./services/activatedTablesService");
+    const userId = req.user.isAdmin ? null : req.user.id;
+    const databases = await activatedTablesService.getAllDatabases(userId);
+    
+    // Extract just the database names
+    const dbNames = databases.map(db => db.DatabaseName);
+    res.json(dbNames);
   } catch (error) {
     console.error("Error fetching accessible databases:", error);
     res
@@ -187,7 +145,6 @@ app.get("/api/databases", authenticateToken, async (req, res) => {
 app.get(
   "/api/databases/:dbName/tables",
   authenticateToken,
-  requireAdmin,
   async (req, res) => {
     try {
       const dbName = req.params.dbName;
@@ -231,9 +188,9 @@ app.get(
       // Para usuarios no admin, verificar permisos específicos de tabla
       const pool = await getPool();
       const userTablePermissionsQuery = `
-        SELECT TableName 
-        FROM USER_TABLE_PERMISSIONS 
-        WHERE UserId = @userId AND DatabaseName = @dbName
+        SELECT table_name 
+        FROM user_permissions 
+        WHERE user_id = @userId AND database_name = @dbName AND table_name IS NOT NULL
       `;
 
       const userTablePermissionsResult = await pool
@@ -243,7 +200,7 @@ app.get(
         .query(userTablePermissionsQuery);
 
       const permittedTables = userTablePermissionsResult.recordset.map(
-        (row) => row.TableName
+        (row) => row.table_name
       );
 
       // Filtrar solo las tablas activadas que el usuario tiene permisos para ver
