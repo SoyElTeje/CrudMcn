@@ -41,7 +41,30 @@ export function LoginModal({ isOpen, onLogin }: LoginModalProps) {
         setError("Error en la autenticación");
       }
     } catch (error: any) {
-      setError(error.response?.data?.error || "Error de conexión");
+      // Extraer el mensaje de error correctamente
+      let errorMessage = "Error de conexión";
+      
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        
+        // Si es un objeto de error complejo, extraer el mensaje
+        if (typeof errorData === 'object') {
+          if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (errorData.error) {
+            // Si error es un objeto, extraer el mensaje
+            if (typeof errorData.error === 'string') {
+              errorMessage = errorData.error;
+            } else if (errorData.error.message) {
+              errorMessage = errorData.error.message;
+            }
+          }
+        } else if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
