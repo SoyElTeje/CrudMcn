@@ -9,7 +9,7 @@ const logger = require("../config/logger");
  * Clase personalizada para errores de la aplicación
  */
 class AppError extends Error {
-  constructor(message, statusCode, code = null) {
+  constructor(message, statusCode = 500, code = null) {
     super(message);
     this.statusCode = statusCode;
     this.status = `${statusCode}`.startsWith("4") ? "fail" : "error";
@@ -82,6 +82,20 @@ const handleJWTExpiredError = () => {
 };
 
 /**
+ * Maneja errores de validación de Joi
+ */
+const handleJoiValidationError = (error) => {
+  const errors = error.details.map(detail => ({
+    field: detail.path.join('.'),
+    message: detail.message
+  }));
+  
+  const errorResponse = new AppError("Datos de entrada inválidos", 400, "VALIDATION_ERROR");
+  errorResponse.errors = errors;
+  return errorResponse;
+};
+
+/**
  * Maneja errores de validación
  */
 const handleValidationError = (error) => {
@@ -127,11 +141,18 @@ const sendErrorDev = (err, res) => {
 const sendErrorProd = (err, res) => {
   // Errores operacionales: enviar mensaje al cliente
   if (err.isOperational) {
-    res.status(err.statusCode).json({
+    const response = {
       status: err.status,
       message: err.message,
       code: err.code,
-    });
+    };
+    
+    // Incluir errores específicos si existen
+    if (err.errors) {
+      response.errors = err.errors;
+    }
+    
+    res.status(err.statusCode).json(response);
   } else {
     // Errores de programación: no enviar detalles
     logger.error("ERROR 💥", err);
@@ -173,6 +194,7 @@ const errorHandler = (err, req, res, next) => {
     if (error.number) error = handleDatabaseError(error);
     if (error.name === "JsonWebTokenError") error = handleJWTError();
     if (error.name === "TokenExpiredError") error = handleJWTExpiredError();
+    if (error.isJoi) error = handleJoiValidationError(error);
     if (error.name === "ValidationError") error = handleValidationError(error);
     if (error.code && error.code.startsWith("LIMIT_"))
       error = handleFileError(error);

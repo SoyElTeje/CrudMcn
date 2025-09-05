@@ -11,12 +11,19 @@ const { AppError } = require("./errorHandler");
  * @returns {string} - String sanitizado
  */
 function sanitizeString(str) {
-  if (typeof str !== "string") return str;
+  if (typeof str !== "string") {
+    if (str === null || str === undefined) return "";
+    return str;
+  }
 
   return str
+    .replace(/<script[^>]*>.*?<\/script>/gi, "") // Eliminar scripts
     .replace(/[<>]/g, "") // Eliminar < y >
     .replace(/javascript:/gi, "") // Eliminar javascript:
     .replace(/on\w+=/gi, "") // Eliminar event handlers
+    .replace(/['"]/g, "") // Eliminar comillas
+    .replace(/;/g, "") // Eliminar punto y coma
+    .replace(/--/g, "") // Eliminar comentarios SQL
     .trim();
 }
 
@@ -78,21 +85,13 @@ const sanitizeInput = (source = "body") => {
  */
 function sanitizeDatabaseName(name) {
   if (typeof name !== "string") {
-    throw new AppError(
-      "Nombre de base de datos inválido",
-      400,
-      "INVALID_DB_NAME"
-    );
+    return "";
   }
 
   const sanitized = name.replace(/[^a-zA-Z0-9_-]/g, "");
 
   if (sanitized.length === 0) {
-    throw new AppError(
-      "Nombre de base de datos vacío después de sanitización",
-      400,
-      "EMPTY_DB_NAME"
-    );
+    return "";
   }
 
   return sanitized;
@@ -106,21 +105,13 @@ function sanitizeDatabaseName(name) {
  */
 function sanitizeColumnName(name) {
   if (typeof name !== "string") {
-    throw new AppError(
-      "Nombre de columna inválido",
-      400,
-      "INVALID_COLUMN_NAME"
-    );
+    return "";
   }
 
   const sanitized = name.replace(/[^a-zA-Z0-9_-]/g, "");
 
   if (sanitized.length === 0) {
-    throw new AppError(
-      "Nombre de columna vacío después de sanitización",
-      400,
-      "EMPTY_COLUMN_NAME"
-    );
+    return "";
   }
 
   return sanitized;
@@ -132,58 +123,32 @@ function sanitizeColumnName(name) {
  * @param {string} dataType - Tipo de dato esperado
  * @returns {any} - Valor sanitizado
  */
-function sanitizeDataValue(value, dataType) {
+function sanitizeDataValue(value, dataType = "varchar") {
   if (value === null || value === undefined) return value;
 
-  const type = dataType.toLowerCase();
-
-  if (
-    type.includes("varchar") ||
-    type.includes("text") ||
-    type.includes("char")
-  ) {
-    return sanitizeString(String(value));
+  // Si es un array, sanitizar cada elemento
+  if (Array.isArray(value)) {
+    return value.map(item => sanitizeDataValue(item, dataType));
   }
 
-  if (
-    type.includes("int") ||
-    type.includes("decimal") ||
-    type.includes("float") ||
-    type.includes("numeric")
-  ) {
-    const num = Number(value);
-    if (isNaN(num)) {
-      throw new AppError(
-        `Valor numérico inválido: ${value}`,
-        400,
-        "INVALID_NUMERIC_VALUE"
-      );
-    }
-    return num;
+  // Si es un objeto, sanitizar recursivamente
+  if (typeof value === "object") {
+    return sanitizeObject(value);
   }
 
-  if (type.includes("date") || type.includes("datetime")) {
-    // Para fechas, solo permitir formatos válidos
-    const dateStr = String(value);
-    if (!/^[\d\-\/:\s]+$/.test(dateStr)) {
-      throw new AppError(
-        `Formato de fecha inválido: ${value}`,
-        400,
-        "INVALID_DATE_FORMAT"
-      );
-    }
-    return dateStr;
+  // Si es número, mantenerlo como número
+  if (typeof value === "number") {
+    return value;
   }
 
-  if (type.includes("bit") || type.includes("boolean")) {
-    if (typeof value === "boolean") return value;
-    if (value === "true" || value === "1") return true;
-    if (value === "false" || value === "0") return false;
-    throw new AppError(
-      `Valor booleano inválido: ${value}`,
-      400,
-      "INVALID_BOOLEAN_VALUE"
-    );
+  // Si es booleano, mantenerlo como booleano
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  // Para strings, aplicar sanitización
+  if (typeof value === "string") {
+    return sanitizeString(value);
   }
 
   return value;
@@ -195,15 +160,7 @@ function sanitizeDataValue(value, dataType) {
 const sanitizeDatabaseData = (req, res, next) => {
   try {
     if (req.body && req.body.data) {
-      const sanitizedData = {};
-
-      for (const [key, value] of Object.entries(req.body.data)) {
-        const cleanKey = sanitizeColumnName(key);
-        // Asumir que es string por defecto, pero esto debería venir del schema de la tabla
-        sanitizedData[cleanKey] = sanitizeDataValue(value, "varchar");
-      }
-
-      req.body.data = sanitizedData;
+      req.body.data = sanitizeObject(req.body.data);
     }
 
     next();

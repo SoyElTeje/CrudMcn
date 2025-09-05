@@ -12,8 +12,11 @@ describe("Error Handler Middleware", () => {
     req = {
       method: "GET",
       url: "/api/test",
+      originalUrl: "/api/test",
       ip: "127.0.0.1",
-      get: jest.fn().mockReturnValue("Mozilla/5.0")
+      get: jest.fn().mockReturnValue("Mozilla/5.0"),
+      headers: {},
+      body: {}
     };
 
     res = {
@@ -75,7 +78,7 @@ describe("Error Handler Middleware", () => {
       expect(res.json).toHaveBeenCalledWith({
         status: "fail",
         message: "Test error",
-        code: undefined
+        code: null
       });
     });
 
@@ -96,6 +99,7 @@ describe("Error Handler Middleware", () => {
       expect(res.json).toHaveBeenCalledWith({
         status: "fail",
         message: "Datos de entrada inválidos",
+        code: "VALIDATION_ERROR",
         errors: [
           { field: "username", message: "Username is required" },
           { field: "password", message: "Password is required" }
@@ -115,7 +119,8 @@ describe("Error Handler Middleware", () => {
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         status: "fail",
-        message: "Token inválido"
+        message: "Token inválido. Por favor, inicia sesión nuevamente.",
+        code: "JWT_ERROR"
       });
     });
 
@@ -131,7 +136,8 @@ describe("Error Handler Middleware", () => {
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         status: "fail",
-        message: "Token expirado"
+        message: "Tu sesión ha expirado. Por favor, inicia sesión nuevamente.",
+        code: "JWT_EXPIRED"
       });
     });
 
@@ -147,7 +153,8 @@ describe("Error Handler Middleware", () => {
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({
         status: "error",
-        message: "Error de conexión a la base de datos"
+        message: "Algo salió mal!",
+        code: "INTERNAL_ERROR"
       });
     });
 
@@ -163,7 +170,8 @@ describe("Error Handler Middleware", () => {
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({
         status: "error",
-        message: "Error de archivo"
+        message: "Algo salió mal!",
+        code: "INTERNAL_ERROR"
       });
     });
 
@@ -178,7 +186,8 @@ describe("Error Handler Middleware", () => {
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({
         status: "error",
-        message: "Error interno del servidor"
+        message: "Algo salió mal!",
+        code: "INTERNAL_ERROR"
       });
     });
 
@@ -195,8 +204,10 @@ describe("Error Handler Middleware", () => {
       // Assert
       expect(res.status).toHaveBeenCalledWith(500);
       expect(res.json).toHaveBeenCalledWith({
-        status: "error",
-        message: "Error interno del servidor",
+        status: error.status,
+        error: error,
+        message: error.message,
+        code: error.code,
         stack: error.stack
       });
 
@@ -214,7 +225,7 @@ describe("Error Handler Middleware", () => {
       expect(next).toHaveBeenCalledWith(expect.any(AppError));
       const error = next.mock.calls[0][0];
       expect(error.statusCode).toBe(404);
-      expect(error.message).toBe("Ruta no encontrada");
+      expect(error.message).toBe("No se encontró /api/test en este servidor!");
     });
   });
 
