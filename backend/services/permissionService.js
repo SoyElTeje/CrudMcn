@@ -13,7 +13,7 @@ class PermissionService {
   constructor() {
     this.permissionTypes = {
       READ: "can_read",
-      WRITE: "can_write", 
+      WRITE: "can_write",
       DELETE: "can_delete",
       CREATE: "can_create",
     };
@@ -30,7 +30,7 @@ class PermissionService {
     try {
       const pool = await getPool();
       const permissionColumn = this.permissionTypes[permissionType];
-      
+
       if (!permissionColumn) {
         throw new Error(`Tipo de permiso inválido: ${permissionType}`);
       }
@@ -49,7 +49,10 @@ class PermissionService {
         .input("databaseName", databaseName)
         .query(query);
 
-      return result.recordset.length > 0 && result.recordset[0][permissionColumn] === true;
+      return (
+        result.recordset.length > 0 &&
+        result.recordset[0][permissionColumn] === true
+      );
     } catch (error) {
       logger.database(`Error verificando permiso de BD: ${error.message}`, {
         userId,
@@ -73,7 +76,7 @@ class PermissionService {
     try {
       const pool = await getPool();
       const permissionColumn = this.permissionTypes[permissionType];
-      
+
       if (!permissionColumn) {
         throw new Error(`Tipo de permiso inválido: ${permissionType}`);
       }
@@ -93,7 +96,10 @@ class PermissionService {
         .input("tableName", tableName)
         .query(query);
 
-      return result.recordset.length > 0 && result.recordset[0][permissionColumn] === true;
+      return (
+        result.recordset.length > 0 &&
+        result.recordset[0][permissionColumn] === true
+      );
     } catch (error) {
       logger.database(`Error verificando permiso de tabla: ${error.message}`, {
         userId,
@@ -124,14 +130,18 @@ class PermissionService {
         tableName,
         permissionType
       );
-      
+
       if (hasTablePermission) {
         return true;
       }
     }
 
     // Si no tiene permisos de tabla o no se especificó tabla, verificar permisos de BD
-    return await this.hasDatabasePermission(userId, databaseName, permissionType);
+    return await this.hasDatabasePermission(
+      userId,
+      databaseName,
+      permissionType
+    );
   }
 
   /**
@@ -144,7 +154,7 @@ class PermissionService {
   async assignDatabasePermission(userId, databaseName, permissions) {
     try {
       const pool = await getPool();
-      
+
       // Verificar si ya existe el permiso
       const existingQuery = `
         SELECT id FROM user_permissions 
@@ -152,7 +162,7 @@ class PermissionService {
         AND database_name = @databaseName 
         AND table_name IS NULL
       `;
-      
+
       const existingResult = await pool
         .request()
         .input("userId", userId)
@@ -169,7 +179,7 @@ class PermissionService {
           AND database_name = @databaseName 
           AND table_name IS NULL
         `;
-        
+
         await pool
           .request()
           .input("userId", userId)
@@ -186,7 +196,7 @@ class PermissionService {
           (user_id, database_name, table_name, can_read, can_write, can_delete, can_create, created_at, updated_at)
           VALUES (@userId, @databaseName, NULL, @canRead, @canWrite, @canDelete, @canCreate, GETDATE(), GETDATE())
         `;
-        
+
         await pool
           .request()
           .input("userId", userId)
@@ -225,7 +235,7 @@ class PermissionService {
   async assignTablePermission(userId, databaseName, tableName, permissions) {
     try {
       const pool = await getPool();
-      
+
       // Verificar si ya existe el permiso
       const existingQuery = `
         SELECT id FROM user_permissions 
@@ -233,7 +243,7 @@ class PermissionService {
         AND database_name = @databaseName 
         AND table_name = @tableName
       `;
-      
+
       const existingResult = await pool
         .request()
         .input("userId", userId)
@@ -251,7 +261,7 @@ class PermissionService {
           AND database_name = @databaseName 
           AND table_name = @tableName
         `;
-        
+
         await pool
           .request()
           .input("userId", userId)
@@ -269,7 +279,7 @@ class PermissionService {
           (user_id, database_name, table_name, can_read, can_write, can_delete, can_create, created_at, updated_at)
           VALUES (@userId, @databaseName, @tableName, @canRead, @canWrite, @canDelete, @canCreate, GETDATE(), GETDATE())
         `;
-        
+
         await pool
           .request()
           .input("userId", userId)
@@ -309,14 +319,14 @@ class PermissionService {
   async removeDatabasePermission(userId, databaseName) {
     try {
       const pool = await getPool();
-      
+
       const query = `
         DELETE FROM user_permissions 
         WHERE user_id = @userId 
         AND database_name = @databaseName 
         AND table_name IS NULL
       `;
-      
+
       await pool
         .request()
         .input("userId", userId)
@@ -347,14 +357,14 @@ class PermissionService {
   async removeTablePermission(userId, databaseName, tableName) {
     try {
       const pool = await getPool();
-      
+
       const query = `
         DELETE FROM user_permissions 
         WHERE user_id = @userId 
         AND database_name = @databaseName 
         AND table_name = @tableName
       `;
-      
+
       await pool
         .request()
         .input("userId", userId)
@@ -398,9 +408,12 @@ class PermissionService {
       const tableExists = tableExistsResult.recordset[0].count === 1;
 
       if (!tableExists) {
-        logger.database("Tabla de permisos no existe, retornando permisos vacíos", {
-          userId,
-        });
+        logger.database(
+          "Tabla de permisos no existe, retornando permisos vacíos",
+          {
+            userId,
+          }
+        );
         return {
           databasePermissions: [],
           tablePermissions: [],
@@ -421,7 +434,7 @@ class PermissionService {
         WHERE user_id = @userId AND table_name IS NULL
         ORDER BY database_name
       `;
-      
+
       const databasePermissionsResult = await pool
         .request()
         .input("userId", userId)
@@ -442,7 +455,7 @@ class PermissionService {
         WHERE user_id = @userId AND table_name IS NOT NULL
         ORDER BY database_name, table_name
       `;
-      
+
       const tablePermissionsResult = await pool
         .request()
         .input("userId", userId)
@@ -453,10 +466,13 @@ class PermissionService {
         tablePermissions: tablePermissionsResult.recordset,
       };
     } catch (error) {
-      logger.database(`Error obteniendo permisos de usuario: ${error.message}`, {
-        userId,
-        error: error.message,
-      });
+      logger.database(
+        `Error obteniendo permisos de usuario: ${error.message}`,
+        {
+          userId,
+          error: error.message,
+        }
+      );
       throw error;
     }
   }
@@ -469,7 +485,7 @@ class PermissionService {
   async getUsersWithDatabasePermission(databaseName) {
     try {
       const pool = await getPool();
-      
+
       const query = `
         SELECT DISTINCT 
           u.id, 
@@ -485,7 +501,7 @@ class PermissionService {
         AND up.table_name IS NULL
         ORDER BY u.username
       `;
-      
+
       const result = await pool
         .request()
         .input("databaseName", databaseName)
@@ -493,10 +509,13 @@ class PermissionService {
 
       return result.recordset;
     } catch (error) {
-      logger.database(`Error obteniendo usuarios con permisos de BD: ${error.message}`, {
-        databaseName,
-        error: error.message,
-      });
+      logger.database(
+        `Error obteniendo usuarios con permisos de BD: ${error.message}`,
+        {
+          databaseName,
+          error: error.message,
+        }
+      );
       throw error;
     }
   }
@@ -510,7 +529,7 @@ class PermissionService {
   async getUsersWithTablePermission(databaseName, tableName) {
     try {
       const pool = await getPool();
-      
+
       const query = `
         SELECT DISTINCT 
           u.id, 
@@ -527,7 +546,7 @@ class PermissionService {
         AND up.table_name = @tableName
         ORDER BY u.username
       `;
-      
+
       const result = await pool
         .request()
         .input("databaseName", databaseName)
@@ -536,11 +555,14 @@ class PermissionService {
 
       return result.recordset;
     } catch (error) {
-      logger.database(`Error obteniendo usuarios con permisos de tabla: ${error.message}`, {
-        databaseName,
-        tableName,
-        error: error.message,
-      });
+      logger.database(
+        `Error obteniendo usuarios con permisos de tabla: ${error.message}`,
+        {
+          databaseName,
+          tableName,
+          error: error.message,
+        }
+      );
       throw error;
     }
   }

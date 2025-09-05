@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Pagination } from "./Pagination";
+import DateInput from "./ui/DateInput";
 // API configuration
 const API_BASE_URL = import.meta.env.VITE_CURRENT_IP || "http://localhost:3001";
 
@@ -261,26 +262,20 @@ const LogsViewer: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Fecha Inicio
-            </label>
-            <input
-              type="date"
+            <DateInput
+              label="Fecha Inicio"
               value={filters.startDate}
-              onChange={(e) => handleFilterChange("startDate", e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+              onChange={(value) => handleFilterChange("startDate", value)}
+              placeholder="DD/MM/AAAA"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Fecha Fin
-            </label>
-            <input
-              type="date"
+            <DateInput
+              label="Fecha Fin"
               value={filters.endDate}
-              onChange={(e) => handleFilterChange("endDate", e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+              onChange={(value) => handleFilterChange("endDate", value)}
+              placeholder="DD/MM/AAAA"
             />
           </div>
         </div>

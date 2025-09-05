@@ -29,13 +29,16 @@ class AuthService {
     try {
       const pool = await getPool();
       const user = await this.getUserByUsername(username);
-      
+
       if (!user) {
         return null;
       }
 
-      const isValidPassword = await bcrypt.compare(password, user.password_hash);
-      
+      const isValidPassword = await bcrypt.compare(
+        password,
+        user.password_hash
+      );
+
       if (!isValidPassword) {
         return null;
       }
@@ -66,7 +69,7 @@ class AuthService {
     try {
       const pool = await getPool();
       const query = "SELECT * FROM users WHERE username = @username";
-      
+
       const result = await pool
         .request()
         .input("username", username)
@@ -74,10 +77,13 @@ class AuthService {
 
       return result.recordset.length > 0 ? result.recordset[0] : null;
     } catch (error) {
-      logger.database(`Error obteniendo usuario por username: ${error.message}`, {
-        username,
-        error: error.message,
-      });
+      logger.database(
+        `Error obteniendo usuario por username: ${error.message}`,
+        {
+          username,
+          error: error.message,
+        }
+      );
       throw error;
     }
   }
@@ -91,7 +97,7 @@ class AuthService {
     try {
       // Verificar si la columna is_admin existe
       const hasAdminColumn = await this.hasAdminColumn();
-      
+
       if (!hasAdminColumn) {
         // Fallback a lógica anterior
         return user.username === "admin";
@@ -121,7 +127,7 @@ class AuthService {
         WHERE TABLE_NAME = 'users' 
         AND COLUMN_NAME = 'is_admin'
       `;
-      
+
       const result = await pool.request().query(query);
       return result.recordset[0].count > 0;
     } catch (error) {
@@ -144,8 +150,8 @@ class AuthService {
       isAdmin: user.isAdmin,
     };
 
-    return jwt.sign(payload, this.jwtSecret, { 
-      expiresIn: this.jwtExpiresIn 
+    return jwt.sign(payload, this.jwtSecret, {
+      expiresIn: this.jwtExpiresIn,
     });
   }
 
@@ -176,13 +182,13 @@ class AuthService {
     try {
       const hashedPassword = await bcrypt.hash(password, this.bcryptRounds);
       const pool = await getPool();
-      
+
       const query = `
         INSERT INTO users (username, password_hash, is_admin, created_at) 
         VALUES (@username, @password, @isAdmin, GETDATE()); 
         SELECT SCOPE_IDENTITY() AS id;
       `;
-      
+
       const result = await pool
         .request()
         .input("username", username)
@@ -224,13 +230,13 @@ class AuthService {
     try {
       const hashedPassword = await bcrypt.hash(newPassword, this.bcryptRounds);
       const pool = await getPool();
-      
+
       const query = `
         UPDATE users 
         SET password_hash = @password, updated_at = GETDATE()
         WHERE id = @userId
       `;
-      
+
       await pool
         .request()
         .input("userId", userId)
@@ -258,13 +264,13 @@ class AuthService {
   async updateAdminStatus(userId, isAdmin) {
     try {
       const pool = await getPool();
-      
+
       const query = `
         UPDATE users 
         SET is_admin = @isAdmin, updated_at = GETDATE()
         WHERE id = @userId
       `;
-      
+
       await pool
         .request()
         .input("userId", userId)
@@ -292,7 +298,7 @@ class AuthService {
   async getAllUsers() {
     try {
       const pool = await getPool();
-      
+
       const query = `
         SELECT 
           id, 
@@ -303,9 +309,9 @@ class AuthService {
         FROM users 
         ORDER BY username
       `;
-      
+
       const result = await pool.request().query(query);
-      
+
       logger.auth(`Usuarios listados`, {
         userCount: result.recordset.length,
       });
@@ -327,17 +333,14 @@ class AuthService {
   async deleteUser(userId) {
     try {
       const pool = await getPool();
-      
+
       // Primero eliminar permisos del usuario
       await this.removeAllUserPermissions(userId);
-      
+
       // Luego eliminar el usuario
       const query = "DELETE FROM users WHERE id = @userId";
-      
-      await pool
-        .request()
-        .input("userId", userId)
-        .query(query);
+
+      await pool.request().input("userId", userId).query(query);
 
       logger.auth(`Usuario eliminado`, {
         userId,
@@ -359,22 +362,22 @@ class AuthService {
   async removeAllUserPermissions(userId) {
     try {
       const pool = await getPool();
-      
+
       const query = "DELETE FROM user_permissions WHERE user_id = @userId";
-      
-      await pool
-        .request()
-        .input("userId", userId)
-        .query(query);
+
+      await pool.request().input("userId", userId).query(query);
 
       logger.auth(`Todos los permisos del usuario eliminados`, {
         userId,
       });
     } catch (error) {
-      logger.database(`Error eliminando permisos del usuario: ${error.message}`, {
-        userId,
-        error: error.message,
-      });
+      logger.database(
+        `Error eliminando permisos del usuario: ${error.message}`,
+        {
+          userId,
+          error: error.message,
+        }
+      );
       throw error;
     }
   }
@@ -386,7 +389,7 @@ class AuthService {
   async createDefaultAdmin() {
     try {
       const existingAdmin = await this.getUserByUsername("admin");
-      
+
       if (!existingAdmin) {
         await this.createUser("admin", "admin123", true);
         logger.info("Usuario administrador por defecto creado");
@@ -394,40 +397,73 @@ class AuthService {
         logger.info("Usuario administrador ya existe");
       }
     } catch (error) {
-      logger.error(`Error creando administrador por defecto: ${error.message}`, {
-        error: error.message,
-      });
+      logger.error(
+        `Error creando administrador por defecto: ${error.message}`,
+        {
+          error: error.message,
+        }
+      );
       throw error;
     }
   }
 
   // Métodos de delegación para el servicio de permisos
   async hasDatabasePermission(userId, databaseName, permissionType) {
-    return await permissionService.hasDatabasePermission(userId, databaseName, permissionType);
+    return await permissionService.hasDatabasePermission(
+      userId,
+      databaseName,
+      permissionType
+    );
   }
 
   async hasTablePermission(userId, databaseName, tableName, permissionType) {
-    return await permissionService.hasTablePermission(userId, databaseName, tableName, permissionType);
+    return await permissionService.hasTablePermission(
+      userId,
+      databaseName,
+      tableName,
+      permissionType
+    );
   }
 
   async hasPermission(userId, databaseName, tableName, permissionType) {
-    return await permissionService.hasPermission(userId, databaseName, tableName, permissionType);
+    return await permissionService.hasPermission(
+      userId,
+      databaseName,
+      tableName,
+      permissionType
+    );
   }
 
   async assignDatabasePermission(userId, databaseName, permissions) {
-    return await permissionService.assignDatabasePermission(userId, databaseName, permissions);
+    return await permissionService.assignDatabasePermission(
+      userId,
+      databaseName,
+      permissions
+    );
   }
 
   async assignTablePermission(userId, databaseName, tableName, permissions) {
-    return await permissionService.assignTablePermission(userId, databaseName, tableName, permissions);
+    return await permissionService.assignTablePermission(
+      userId,
+      databaseName,
+      tableName,
+      permissions
+    );
   }
 
   async removeDatabasePermission(userId, databaseName) {
-    return await permissionService.removeDatabasePermission(userId, databaseName);
+    return await permissionService.removeDatabasePermission(
+      userId,
+      databaseName
+    );
   }
 
   async removeTablePermission(userId, databaseName, tableName) {
-    return await permissionService.removeTablePermission(userId, databaseName, tableName);
+    return await permissionService.removeTablePermission(
+      userId,
+      databaseName,
+      tableName
+    );
   }
 
   async getUserPermissions(userId) {
@@ -439,7 +475,10 @@ class AuthService {
   }
 
   async getUsersWithTablePermission(databaseName, tableName) {
-    return await permissionService.getUsersWithTablePermission(databaseName, tableName);
+    return await permissionService.getUsersWithTablePermission(
+      databaseName,
+      tableName
+    );
   }
 }
 
