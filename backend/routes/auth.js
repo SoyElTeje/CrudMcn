@@ -2,25 +2,36 @@ const express = require("express");
 const router = express.Router();
 const authService = require("../services/authService");
 const { authenticateToken, requireAdmin } = require("../middleware/auth");
+const { catchAsync, AppError } = require("../middleware/errorHandler");
+const { validate, schemas } = require("../middleware/validation");
+const { sanitizeInput } = require("../middleware/sanitization");
+const logger = require("../config/logger");
 
 // Ruta de login
-router.post("/login", async (req, res) => {
-  try {
+router.post(
+  "/login",
+  sanitizeInput("body"),
+  validate(schemas.login),
+  catchAsync(async (req, res) => {
     const { username, password } = req.body;
-
-    if (!username || !password) {
-      return res
-        .status(400)
-        .json({ error: "Usuario y contraseña son requeridos" });
-    }
 
     const user = await authService.verifyCredentials(username, password);
 
     if (!user) {
-      return res.status(401).json({ error: "Credenciales inválidas" });
+      logger.security(`Intento de login fallido para usuario: ${username}`, {
+        ip: req.ip,
+        userAgent: req.get("User-Agent"),
+      });
+      throw new AppError("Credenciales inválidas", 401, "INVALID_CREDENTIALS");
     }
 
     const token = authService.generateToken(user);
+
+    logger.auth(`Login exitoso para usuario: ${username}`, {
+      userId: user.id,
+      isAdmin: user.isAdmin,
+      ip: req.ip,
+    });
 
     res.json({
       success: true,
@@ -31,11 +42,8 @@ router.post("/login", async (req, res) => {
         isAdmin: user.isAdmin,
       },
     });
-  } catch (error) {
-    console.error("Error en login:", error);
-    res.status(500).json({ error: "Error interno del servidor" });
-  }
-});
+  })
+);
 
 // Ruta para verificar token
 router.get("/verify", authenticateToken, (req, res) => {
@@ -46,26 +54,33 @@ router.get("/verify", authenticateToken, (req, res) => {
 });
 
 // Ruta para obtener todos los usuarios (solo admin)
-router.get("/users", authenticateToken, requireAdmin, async (req, res) => {
-  try {
+router.get(
+  "/users",
+  authenticateToken,
+  requireAdmin,
+  catchAsync(async (req, res) => {
     const users = await authService.getAllUsers();
+
+    logger.auth(
+      `Listado de usuarios obtenido por admin: ${req.user.username}`,
+      {
+        adminId: req.user.id,
+        userCount: users.length,
+      }
+    );
+
     res.json(users);
-  } catch (error) {
-    console.error("Error obteniendo usuarios:", error);
-    res.status(500).json({ error: "Error interno del servidor" });
-  }
-});
+  })
+);
 
 // Ruta para crear un nuevo usuario (solo admin)
-router.post("/users", authenticateToken, requireAdmin, async (req, res) => {
-  try {
+router.post(
+  "/users",
+  authenticateToken,
+  requireAdmin,
+  validate(schemas.createUser),
+  catchAsync(async (req, res) => {
     const { username, password, isAdmin } = req.body;
-
-    if (!username || !password) {
-      return res
-        .status(400)
-        .json({ error: "Usuario y contraseña son requeridos" });
-    }
 
     const newUser = await authService.createUser(
       username,
@@ -73,55 +88,53 @@ router.post("/users", authenticateToken, requireAdmin, async (req, res) => {
       isAdmin || false
     );
 
+    logger.auth(`Usuario creado por admin: ${req.user.username}`, {
+      adminId: req.user.id,
+      newUserId: newUser.id,
+      newUsername: newUser.username,
+      isAdmin: newUser.isAdmin,
+    });
+
     res.status(201).json({
       success: true,
       user: newUser,
     });
-  } catch (error) {
-    console.error("Error creando usuario:", error);
-
-    // Manejar errores de SQL Server para usuarios duplicados
-    if (error.code === "EREQUEST" && error.number === 2627) {
-      return res.status(400).json({ error: "El nombre de usuario ya existe" });
-    }
-
-    // Manejar errores de MySQL para compatibilidad (si se usa en el futuro)
-    if (error.code === "ER_DUP_ENTRY") {
-      return res.status(400).json({ error: "El nombre de usuario ya existe" });
-    }
-
-    res.status(500).json({ error: "Error interno del servidor" });
-  }
-});
+  })
+);
 
 // Ruta para actualizar contraseña de usuario (solo admin o el propio usuario)
-router.put("/users/:userId/password", authenticateToken, async (req, res) => {
-  try {
+router.put(
+  "/users/:userId/password",
+  authenticateToken,
+  validate(schemas.userId, "params"),
+  validate(schemas.updatePassword),
+  catchAsync(async (req, res) => {
     const { userId } = req.params;
     const { newPassword } = req.body;
 
     // Verificar que el usuario puede cambiar esta contraseña
     if (!req.user.isAdmin && req.user.id !== parseInt(userId)) {
-      return res
-        .status(403)
-        .json({ error: "No tienes permisos para cambiar esta contraseña" });
-    }
-
-    if (!newPassword) {
-      return res.status(400).json({ error: "Nueva contraseña es requerida" });
+      throw new AppError(
+        "No tienes permisos para cambiar esta contraseña",
+        403,
+        "INSUFFICIENT_PERMISSIONS"
+      );
     }
 
     await authService.updateUserPassword(userId, newPassword);
+
+    logger.auth(`Contraseña actualizada por: ${req.user.username}`, {
+      adminId: req.user.id,
+      targetUserId: userId,
+      isSelfUpdate: req.user.id === parseInt(userId),
+    });
 
     res.json({
       success: true,
       message: "Contraseña actualizada correctamente",
     });
-  } catch (error) {
-    console.error("Error actualizando contraseña:", error);
-    res.status(500).json({ error: "Error interno del servidor" });
-  }
-});
+  })
+);
 
 // Ruta para actualizar estado de administrador (solo admin)
 router.put(
@@ -218,32 +231,33 @@ router.post(
   "/users/:userId/database-permissions",
   authenticateToken,
   requireAdmin,
-  async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const { databaseName, permissions } = req.body;
+  validate(schemas.userId, "params"),
+  validate(schemas.assignDatabasePermission),
+  catchAsync(async (req, res) => {
+    const { userId } = req.params;
+    const { databaseName, permissions } = req.body;
 
-      if (!databaseName || !permissions) {
-        return res
-          .status(400)
-          .json({ error: "databaseName y permissions son requeridos" });
-      }
+    await authService.assignDatabasePermission(
+      userId,
+      databaseName,
+      permissions
+    );
 
-      await authService.assignDatabasePermission(
-        userId,
+    logger.auth(
+      `Permisos de base de datos asignados por admin: ${req.user.username}`,
+      {
+        adminId: req.user.id,
+        targetUserId: userId,
         databaseName,
-        permissions
-      );
+        permissions,
+      }
+    );
 
-      res.json({
-        success: true,
-        message: "Permisos de base de datos asignados correctamente",
-      });
-    } catch (error) {
-      console.error("Error asignando permisos de base de datos:", error);
-      res.status(500).json({ error: "Error interno del servidor" });
-    }
-  }
+    res.json({
+      success: true,
+      message: "Permisos de base de datos asignados correctamente",
+    });
+  })
 );
 
 // Ruta para asignar permisos de tabla específica (solo admin)
@@ -251,33 +265,32 @@ router.post(
   "/users/:userId/table-permissions",
   authenticateToken,
   requireAdmin,
-  async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const { databaseName, tableName, permissions } = req.body;
+  validate(schemas.userId, "params"),
+  validate(schemas.assignTablePermission),
+  catchAsync(async (req, res) => {
+    const { userId } = req.params;
+    const { databaseName, tableName, permissions } = req.body;
 
-      if (!databaseName || !tableName || !permissions) {
-        return res.status(400).json({
-          error: "databaseName, tableName y permissions son requeridos",
-        });
-      }
+    await authService.assignTablePermission(
+      userId,
+      databaseName,
+      tableName,
+      permissions
+    );
 
-      await authService.assignTablePermission(
-        userId,
-        databaseName,
-        tableName,
-        permissions
-      );
+    logger.auth(`Permisos de tabla asignados por admin: ${req.user.username}`, {
+      adminId: req.user.id,
+      targetUserId: userId,
+      databaseName,
+      tableName,
+      permissions,
+    });
 
-      res.json({
-        success: true,
-        message: "Permisos de tabla asignados correctamente",
-      });
-    } catch (error) {
-      console.error("Error asignando permisos de tabla:", error);
-      res.status(500).json({ error: "Error interno del servidor" });
-    }
-  }
+    res.json({
+      success: true,
+      message: "Permisos de tabla asignados correctamente",
+    });
+  })
 );
 
 // Ruta para eliminar permisos de base de datos (solo admin)
