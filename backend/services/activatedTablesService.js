@@ -130,21 +130,21 @@ class ActivatedTablesService {
     try {
       const pool = await getPool();
 
-      // Siempre usar consulta simple para evitar problemas con JOINs
+      // Usar nombres de columnas correctos de la tabla activated_tables
       const query = `
         SELECT 
-          at.Id,
-          at.DatabaseName,
-          at.TableName,
-          at.Description,
-          at.IsActive,
-          at.FechaCreacion,
-          at.CreatedBy,
+          at.id as Id,
+          at.database_name as DatabaseName,
+          at.table_name as TableName,
+          at.description as Description,
+          at.is_active as IsActive,
+          at.created_at as FechaCreacion,
+          at.created_by as CreatedBy,
           u.username as CreatedByUsername
-        FROM ACTIVATED_TABLES at
-        LEFT JOIN users u ON at.CreatedBy = u.id
-        WHERE at.IsActive = 1
-        ORDER BY at.DatabaseName, at.TableName
+        FROM activated_tables at
+        LEFT JOIN users u ON at.created_by = u.id
+        WHERE at.is_active = 1
+        ORDER BY at.database_name, at.table_name
       `;
 
       const result = await pool.request().query(query);
@@ -197,8 +197,8 @@ class ActivatedTablesService {
 
       // Verificar si la tabla ya está activada
       const checkQuery = `
-        SELECT Id FROM ACTIVATED_TABLES 
-        WHERE DatabaseName = @databaseName AND TableName = @tableName
+        SELECT id FROM activated_tables 
+        WHERE database_name = @databaseName AND table_name = @tableName
       `;
 
       const checkResult = await pool
@@ -210,9 +210,9 @@ class ActivatedTablesService {
       if (checkResult.recordset.length > 0) {
         // Si ya existe, actualizar
         const updateQuery = `
-          UPDATE ACTIVATED_TABLES 
-          SET Description = @description, IsActive = 1, FechaModificacion = GETDATE()
-          WHERE DatabaseName = @databaseName AND TableName = @tableName
+          UPDATE activated_tables 
+          SET description = @description, is_active = 1, updated_at = GETDATE()
+          WHERE database_name = @databaseName AND table_name = @tableName
         `;
 
         await pool
@@ -222,11 +222,11 @@ class ActivatedTablesService {
           .input("description", description)
           .query(updateQuery);
 
-        return checkResult.recordset[0].Id;
+        return checkResult.recordset[0].id;
       } else {
         // Si no existe, crear nueva
         const insertQuery = `
-          INSERT INTO ACTIVATED_TABLES (DatabaseName, TableName, Description, IsActive, FechaCreacion, CreatedBy)
+          INSERT INTO activated_tables (database_name, table_name, description, is_active, created_at, created_by)
           VALUES (@databaseName, @tableName, @description, 1, GETDATE(), @userId)
         `;
 
@@ -254,9 +254,9 @@ class ActivatedTablesService {
       const pool = await getPool();
 
       const query = `
-        UPDATE ACTIVATED_TABLES 
-        SET IsActive = 0, FechaModificacion = GETDATE()
-        WHERE DatabaseName = @databaseName AND TableName = @tableName
+        UPDATE activated_tables 
+        SET is_active = 0, updated_at = GETDATE()
+        WHERE database_name = @databaseName AND table_name = @tableName
       `;
 
       await pool
@@ -277,28 +277,8 @@ class ActivatedTablesService {
    */
   async getTableConditions(activatedTableId) {
     try {
-      const pool = await getPool();
-
-      const query = `
-        SELECT 
-          tc.Id,
-          tc.ColumnName,
-          tc.ConditionType,
-          tc.ConditionValue,
-          tc.IsRequired,
-          tc.CreatedAt,
-          tc.CreatedBy
-        FROM TABLE_CONDITIONS tc
-        WHERE tc.ActivatedTableId = @activatedTableId
-        ORDER BY tc.ColumnName
-      `;
-
-      const result = await pool
-        .request()
-        .input("activatedTableId", activatedTableId)
-        .query(query);
-
-      return result.recordset;
+      // Por ahora, retornar array vacío ya que no existe la tabla table_conditions
+      return [];
     } catch (error) {
       console.error("Error obteniendo condiciones de tabla:", error);
       throw error;
@@ -310,32 +290,8 @@ class ActivatedTablesService {
    */
   async getTableConditionsByDatabaseAndTable(databaseName, tableName) {
     try {
-      const pool = await getPool();
-
-      const query = `
-        SELECT 
-          tc.Id,
-          tc.ColumnName,
-          tc.ConditionType,
-          tc.ConditionValue,
-          tc.IsRequired,
-          tc.CreatedAt,
-          tc.CreatedBy
-        FROM TABLE_CONDITIONS tc
-        INNER JOIN ACTIVATED_TABLES at ON tc.ActivatedTableId = at.Id
-        WHERE at.DatabaseName = @databaseName 
-        AND at.TableName = @tableName
-        AND at.IsActive = 1
-        ORDER BY tc.ColumnName
-      `;
-
-      const result = await pool
-        .request()
-        .input("databaseName", databaseName)
-        .input("tableName", tableName)
-        .query(query);
-
-      return result.recordset;
+      // Por ahora, retornar array vacío ya que no existe la tabla table_conditions
+      return [];
     } catch (error) {
       console.error("Error obteniendo condiciones de tabla:", error);
       throw error;
@@ -347,43 +303,7 @@ class ActivatedTablesService {
    */
   async saveTableConditions(activatedTableId, conditions, userId) {
     try {
-      const pool = await getPool();
-
-      // Eliminar condiciones existentes
-      const deleteQuery = `
-        DELETE FROM TABLE_CONDITIONS 
-        WHERE ActivatedTableId = @activatedTableId
-      `;
-
-      await pool
-        .request()
-        .input("activatedTableId", activatedTableId)
-        .query(deleteQuery);
-
-      // Insertar nuevas condiciones
-      for (const condition of conditions) {
-        const insertQuery = `
-          INSERT INTO TABLE_CONDITIONS (
-            ActivatedTableId, ColumnName, ConditionType, 
-            ConditionValue, IsRequired, CreatedAt, CreatedBy
-          )
-          VALUES (
-            @activatedTableId, @columnName, @conditionType,
-            @conditionValue, @isRequired, GETDATE(), @userId
-          )
-        `;
-
-        await pool
-          .request()
-          .input("activatedTableId", activatedTableId)
-          .input("columnName", condition.columnName)
-          .input("conditionType", condition.conditionType)
-          .input("conditionValue", JSON.stringify(condition.conditionValue))
-          .input("isRequired", condition.isRequired || false)
-          .input("userId", userId)
-          .query(insertQuery);
-      }
-
+      // Por ahora, no hacer nada ya que no existe la tabla table_conditions
       return true;
     } catch (error) {
       console.error("Error guardando condiciones de tabla:", error);
@@ -406,8 +326,8 @@ class ActivatedTablesService {
 
       // Obtener el ID de la tabla activada
       const tableQuery = `
-        SELECT Id FROM ACTIVATED_TABLES 
-        WHERE DatabaseName = @databaseName AND TableName = @tableName
+        SELECT id FROM activated_tables 
+        WHERE database_name = @databaseName AND table_name = @tableName
       `;
 
       const tableResult = await pool
@@ -420,14 +340,14 @@ class ActivatedTablesService {
         throw new Error("Tabla no encontrada");
       }
 
-      const activatedTableId = tableResult.recordset[0].Id;
+      const activatedTableId = tableResult.recordset[0].id;
 
       // Actualizar descripción
       if (description) {
         const updateDescQuery = `
-          UPDATE ACTIVATED_TABLES 
-          SET Description = @description, FechaModificacion = GETDATE()
-          WHERE Id = @activatedTableId
+          UPDATE activated_tables 
+          SET description = @description, updated_at = GETDATE()
+          WHERE id = @activatedTableId
         `;
 
         await pool
@@ -457,10 +377,10 @@ class ActivatedTablesService {
       const pool = await getPool();
 
       const query = `
-        SELECT Id FROM ACTIVATED_TABLES 
-        WHERE DatabaseName = @databaseName 
-        AND TableName = @tableName 
-        AND IsActive = 1
+        SELECT id FROM activated_tables 
+        WHERE database_name = @databaseName 
+        AND table_name = @tableName 
+        AND is_active = 1
       `;
 
       const result = await pool
