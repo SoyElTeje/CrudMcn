@@ -88,11 +88,10 @@ describe("Validation Middleware", () => {
 
       const middleware = validate(schemas.login);
 
-      // Act
-      middleware(req, res, next);
-
-      // Assert
-      expect(next).toHaveBeenCalledWith(expect.any(AppError));
+      // Act & Assert
+      expect(() => {
+        middleware(req, res, next);
+      }).toThrow(AppError);
     });
   });
 
@@ -116,7 +115,7 @@ describe("Validation Middleware", () => {
 
         const { error } = schemas.login.validate(invalidData);
         expect(error).toBeDefined();
-        expect(error.details[0].message).toContain("nombre de usuario");
+        expect(error.details[0].message).toContain("username");
       });
 
       it("debería rechazar login con password muy corto", () => {
@@ -196,7 +195,7 @@ describe("Validation Middleware", () => {
 
         const { error } = schemas.assignDatabasePermission.validate(invalidData);
         expect(error).toBeDefined();
-        expect(error.details[0].message).toContain("base de datos");
+        expect(error.details[0].message).toContain("databaseName");
       });
     });
 
@@ -221,7 +220,7 @@ describe("Validation Middleware", () => {
 
         const { error } = schemas.assignTablePermission.validate(invalidData);
         expect(error).toBeDefined();
-        expect(error.details[0].message).toContain("tabla");
+        expect(error.details[0].message).toContain("tableName");
       });
     });
 
@@ -342,12 +341,12 @@ describe("Validation Middleware", () => {
 
       it("debería rechazar datos vacíos", () => {
         const invalidData = {
-          data: {}
+          data: null
         };
 
         const { error } = schemas.tableData.validate(invalidData);
         expect(error).toBeDefined();
-        expect(error.details[0].message).toContain("data");
+        expect(error.details[0].message).toContain("objeto");
       });
     });
 

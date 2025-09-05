@@ -54,6 +54,11 @@ class PermissionService {
         result.recordset[0][permissionColumn] === true
       );
     } catch (error) {
+      // Si es un error de tipo de permiso inválido, re-lanzarlo
+      if (error.message.includes("Tipo de permiso inválido")) {
+        throw error;
+      }
+      
       logger.database(`Error verificando permiso de BD: ${error.message}`, {
         userId,
         databaseName,
