@@ -1463,8 +1463,9 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "frontend", "dist", "index.html"));
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   logger.info(`🚀 Server running on port ${PORT}`);
   logger.info(`📊 Trial endpoint: http://localhost:${PORT}/api/trial/table`);
   logger.info(`🔍 Health check: http://localhost:${PORT}/api/health`);
+  logger.info(`🌐 Server accessible from external connections on port ${PORT}`);
 });
