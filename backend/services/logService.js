@@ -255,18 +255,18 @@ class LogService {
     try {
       const pool = await getPool();
 
-      // Verificar si la tabla LOGS existe
+      // Verificar si la tabla audit_logs existe
       const tableExistsQuery = `
         SELECT COUNT(*) as count 
         FROM INFORMATION_SCHEMA.TABLES 
-        WHERE TABLE_NAME = 'LOGS'
+        WHERE TABLE_NAME = 'audit_logs'
       `;
 
       const tableExistsResult = await pool.request().query(tableExistsQuery);
       const tableExists = tableExistsResult.recordset[0].count > 0;
 
       if (!tableExists) {
-        console.log("⚠️ Tabla LOGS no existe, retornando logs vacíos");
+        console.log("⚠️ Tabla audit_logs no existe, retornando logs vacíos");
         return {
           data: [],
           totalRecords: 0,
@@ -278,9 +278,11 @@ class LogService {
 
       let query = `
         SELECT 
-          Id, UserId, Action, DatabaseName, TableName,
-          Details, FechaCreacion, IPAddress, UserAgent
-        FROM LOGS 
+          id as Id, user_id as UserId, action as Action, 
+          database_name as DatabaseName, table_name as TableName,
+          record_id as RecordId, old_values as OldData, new_values as NewData,
+          ip_address as IPAddress, user_agent as UserAgent, timestamp as FechaCreacion
+        FROM audit_logs 
         WHERE 1=1
       `;
 
@@ -288,39 +290,39 @@ class LogService {
 
       // Aplicar filtros
       if (filters.action) {
-        query += " AND Action = @action";
+        query += " AND action = @action";
         request.input("action", filters.action);
       }
 
       if (filters.databaseName) {
-        query += " AND DatabaseName = @databaseName";
+        query += " AND database_name = @databaseName";
         request.input("databaseName", filters.databaseName);
       }
 
       if (filters.tableName) {
-        query += " AND TableName = @tableName";
+        query += " AND table_name = @tableName";
         request.input("tableName", filters.tableName);
       }
 
       if (filters.username) {
-        query += " AND Username LIKE @username";
-        request.input("username", `%${filters.username}%`);
+        query += " AND user_id = @username";
+        request.input("username", filters.username);
       }
 
       if (filters.startDate) {
-        query += " AND FechaCreacion >= @startDate";
+        query += " AND timestamp >= @startDate";
         request.input("startDate", filters.startDate);
       }
 
       if (filters.endDate) {
-        query += " AND FechaCreacion <= @endDate";
+        query += " AND timestamp <= @endDate";
         request.input("endDate", filters.endDate);
       }
 
       // Query para contar el total de registros con los mismos filtros
       let countQuery = `
         SELECT COUNT(*) as total
-        FROM LOGS 
+        FROM audit_logs 
         WHERE 1=1
       `;
 
@@ -328,32 +330,32 @@ class LogService {
 
       // Aplicar los mismos filtros al count
       if (filters.action) {
-        countQuery += " AND Action = @action";
+        countQuery += " AND action = @action";
         countRequest.input("action", filters.action);
       }
 
       if (filters.databaseName) {
-        countQuery += " AND DatabaseName = @databaseName";
+        countQuery += " AND database_name = @databaseName";
         countRequest.input("databaseName", filters.databaseName);
       }
 
       if (filters.tableName) {
-        countQuery += " AND TableName = @tableName";
+        countQuery += " AND table_name = @tableName";
         countRequest.input("tableName", filters.tableName);
       }
 
       if (filters.username) {
-        countQuery += " AND Username LIKE @username";
-        countRequest.input("username", `%${filters.username}%`);
+        countQuery += " AND user_id = @username";
+        countRequest.input("username", filters.username);
       }
 
       if (filters.startDate) {
-        countQuery += " AND FechaCreacion >= @startDate";
+        countQuery += " AND timestamp >= @startDate";
         countRequest.input("startDate", filters.startDate);
       }
 
       if (filters.endDate) {
-        countQuery += " AND FechaCreacion <= @endDate";
+        countQuery += " AND timestamp <= @endDate";
         countRequest.input("endDate", filters.endDate);
       }
 
@@ -364,7 +366,7 @@ class LogService {
           .input("offset", offset)
           .query(
             query +
-              " ORDER BY FechaCreacion DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY"
+              " ORDER BY timestamp DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY"
           ),
         countRequest.query(countQuery),
       ]);
@@ -373,14 +375,17 @@ class LogService {
 
       return {
         data: result.recordset.map((log) => {
-          const details = log.Details ? JSON.parse(log.Details) : {};
+          // Parsear los valores JSON si existen
+          const oldData = log.OldData ? JSON.parse(log.OldData) : null;
+          const newData = log.NewData ? JSON.parse(log.NewData) : null;
+          
           return {
             ...log,
-            Username: details.username || null,
-            RecordId: details.recordId || null,
-            OldData: details.oldData || null,
-            NewData: details.newData || null,
-            AffectedRows: details.affectedRows || 1,
+            Username: null, // No tenemos username en audit_logs
+            RecordId: log.RecordId,
+            OldData: oldData,
+            NewData: newData,
+            AffectedRows: 1, // Por defecto, ya que no tenemos este campo
           };
         }),
         totalRecords,
