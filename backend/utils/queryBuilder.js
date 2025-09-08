@@ -88,7 +88,7 @@ function buildWhereClause(filters, request) {
  */
 function buildOrderByClause(sort) {
   if (!sort || !sort.column) {
-    return "ORDER BY (SELECT NULL)";
+    return ""; // No agregar ORDER BY si no hay columna especificada
   }
 
   const direction = sort.direction === "DESC" ? "DESC" : "ASC";
@@ -157,14 +157,22 @@ function parseValueByType(value, dataType) {
  * @param {Object} request - Objeto request de mssql
  * @returns {string} - Consulta SQL completa
  */
-async function buildSelectQuery(tableName, filters, sort, limit, offset, request) {
+async function buildSelectQuery(
+  tableName,
+  filters,
+  sort,
+  limit,
+  offset,
+  request,
+  databaseName = null
+) {
   const whereClause = buildWhereClause(filters, request);
   const orderByClause = buildOrderByClause(sort);
 
   // Obtener información de las columnas para identificar tipos de fecha
-  const { getPool } = require('../db');
-  const pool = await getPool();
-  
+  const { getPool } = require("../db");
+  const pool = await getPool(databaseName);
+
   const columnInfoQuery = `
     SELECT 
       COLUMN_NAME,
@@ -174,32 +182,35 @@ async function buildSelectQuery(tableName, filters, sort, limit, offset, request
     WHERE TABLE_NAME = @tableName
     ORDER BY ORDINAL_POSITION
   `;
-  
-  const columnResult = await pool.request()
-    .input('tableName', tableName)
+
+  const columnResult = await pool
+    .request()
+    .input("tableName", tableName)
     .query(columnInfoQuery);
-  
+
   const columns = columnResult.recordset;
-  
+
   // Construir la lista de columnas con formateo de fechas
-  const columnList = columns.map(col => {
-    const columnName = col.COLUMN_NAME;
-    const dataType = col.DATA_TYPE.toLowerCase();
-    
-    // Si es una columna de fecha, formatearla directamente en SQL
-    if (dataType.includes('date') || dataType.includes('datetime')) {
-      if (dataType.includes('datetime') || dataType.includes('time')) {
-        // Para datetime, incluir hora
-        return `FORMAT([${columnName}], 'dd/MM/yyyy HH:mm:ss') as [${columnName}]`;
+  const columnList = columns
+    .map((col) => {
+      const columnName = col.COLUMN_NAME;
+      const dataType = col.DATA_TYPE.toLowerCase();
+
+      // Si es una columna de fecha, formatearla directamente en SQL
+      if (dataType.includes("date") || dataType.includes("datetime")) {
+        if (dataType.includes("datetime") || dataType.includes("time")) {
+          // Para datetime, incluir hora
+          return `FORMAT([${columnName}], 'dd/MM/yyyy HH:mm:ss') as [${columnName}]`;
+        } else {
+          // Para date, solo fecha
+          return `FORMAT([${columnName}], 'dd/MM/yyyy') as [${columnName}]`;
+        }
       } else {
-        // Para date, solo fecha
-        return `FORMAT([${columnName}], 'dd/MM/yyyy') as [${columnName}]`;
+        // Para otros tipos, usar la columna tal como está
+        return `[${columnName}]`;
       }
-    } else {
-      // Para otros tipos, usar la columna tal como está
-      return `[${columnName}]`;
-    }
-  }).join(', ');
+    })
+    .join(", ");
 
   let query = `SELECT ${columnList} FROM [${tableName}]`;
 
@@ -207,12 +218,28 @@ async function buildSelectQuery(tableName, filters, sort, limit, offset, request
     query += ` ${whereClause}`;
   }
 
-  query += ` ${orderByClause}`;
-
+  // Si necesitamos paginación, usar ROW_NUMBER() para compatibilidad
   if (limit && offset !== undefined) {
-    query += ` OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`;
+    const orderColumn = sort && sort.column ? sort.column : (columns.length > 0 ? columns[0].COLUMN_NAME : 'id');
+    const orderDirection = sort && sort.direction === "DESC" ? "DESC" : "ASC";
+    
+    // Usar ROW_NUMBER() para paginación compatible con versiones más antiguas de SQL Server
+    query = `
+      SELECT * FROM (
+        SELECT ${columnList}, ROW_NUMBER() OVER (ORDER BY [${orderColumn}] ${orderDirection}) as RowNum
+        FROM [${tableName}]
+        ${whereClause}
+      ) AS PaginatedResults
+      WHERE RowNum > @offset AND RowNum <= @offset + @limit
+    `;
+    
     request.input("offset", parseInt(offset));
     request.input("limit", parseInt(limit));
+  } else {
+    // Sin paginación, usar query normal
+    if (orderByClause) {
+      query += ` ${orderByClause}`;
+    }
   }
 
   return query;

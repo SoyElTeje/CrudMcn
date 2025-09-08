@@ -354,7 +354,8 @@ app.get(
         parsedSort,
         limit,
         offset,
-        request
+        request,
+        dbName
       );
 
       const result = await request.query(query);
