@@ -166,6 +166,18 @@ echo [SUCCESS] ✅ Conexión a base de datos verificada
 REM Paso 8: Configurar PM2
 echo [INFO] ⚙️ Configurando PM2...
 
+REM Verificar que PM2 funciona correctamente
+pm2 ping >nul 2>&1
+if errorlevel 1 (
+    echo [WARNING] PM2 no responde, intentando reparar...
+    call quick-fix-pm2.bat
+    if errorlevel 1 (
+        echo [ERROR] No se pudo reparar PM2. Ejecutar: fix-pm2-windows.bat
+        pause
+        exit /b 1
+    )
+)
+
 REM Detener procesos existentes si están corriendo
 pm2 delete all >nul 2>&1
 
