@@ -63,13 +63,27 @@ class LogService {
       const oldValues = oldData ? JSON.stringify(oldData) : null;
       const newValues = newData ? JSON.stringify(newData) : null;
 
+      // Convertir recordId a int si es posible, o null si no
+      let recordIdInt = null;
+      if (recordId) {
+        if (typeof recordId === 'number') {
+          recordIdInt = recordId;
+        } else if (typeof recordId === 'string') {
+          // Intentar extraer un ID numérico del string
+          const match = recordId.match(/\d+/);
+          if (match) {
+            recordIdInt = parseInt(match[0], 10);
+          }
+        }
+      }
+
       await pool
         .request()
         .input("userId", userId)
         .input("action", action)
         .input("databaseName", databaseName)
         .input("tableName", tableName)
-        .input("recordId", recordId)
+        .input("recordId", recordIdInt)
         .input("oldValues", oldValues)
         .input("newValues", newValues)
         .input("affectedRows", affectedRows)
