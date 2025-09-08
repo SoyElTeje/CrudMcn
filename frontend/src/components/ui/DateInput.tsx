@@ -179,9 +179,12 @@ export const DateInput: React.FC<DateInputProps> = ({
   };
 
   return (
-    <div className={`space-y-2 ${className}`}>
+    <div className={className}>
       {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">
+        <label
+          htmlFor={id}
+          className="block text-sm font-medium text-gray-700 mb-1"
+        >
           {label}
           {required && <span className="text-red-500 ml-1">*</span>}
         </label>
@@ -202,7 +205,7 @@ export const DateInput: React.FC<DateInputProps> = ({
         }`}
       />
       {(error || !isValid) && (
-        <p className="text-sm text-red-500">
+        <p className="text-sm text-red-500 mt-1">
           {error || "Formato de fecha inválido. Use DD/MM/AAAA"}
         </p>
       )}
