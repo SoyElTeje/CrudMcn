@@ -381,7 +381,12 @@ class LogService {
           // Parsear los valores JSON si existen
           const oldData = log.OldData ? JSON.parse(log.OldData) : null;
           const newData = log.NewData ? JSON.parse(log.NewData) : null;
-          
+
+          // Formatear la fecha como string ISO
+          const fechaCreacion = log.FechaCreacion instanceof Date 
+            ? log.FechaCreacion.toISOString() 
+            : log.FechaCreacion;
+
           return {
             ...log,
             Username: log.Username, // Ahora viene del JOIN con users
@@ -389,6 +394,7 @@ class LogService {
             OldData: oldData,
             NewData: newData,
             AffectedRows: 1, // Por defecto, ya que no tenemos este campo
+            FechaCreacion: fechaCreacion, // Asegurar que sea string
           };
         }),
         totalRecords,
