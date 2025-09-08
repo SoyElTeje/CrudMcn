@@ -3,8 +3,6 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Input } from "./input";
-import { Label } from "./label";
 
 interface DateInputProps {
   id?: string;
@@ -183,12 +181,12 @@ export const DateInput: React.FC<DateInputProps> = ({
   return (
     <div className={`space-y-2 ${className}`}>
       {label && (
-        <Label htmlFor={id} className="text-sm font-medium">
+        <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">
           {label}
           {required && <span className="text-red-500 ml-1">*</span>}
-        </Label>
+        </label>
       )}
-      <Input
+      <input
         id={id}
         type="text"
         value={displayValue}
@@ -197,10 +195,10 @@ export const DateInput: React.FC<DateInputProps> = ({
         placeholder={placeholder}
         required={required}
         disabled={disabled}
-        className={`${
+        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 text-black ${
           error || !isValid
-            ? "border-red-500 focus:ring-red-500/50"
-            : "border-border/50 focus:ring-primary/50"
+            ? "border-red-500 focus:ring-red-500"
+            : "border-gray-300 focus:ring-blue-500"
         }`}
       />
       {(error || !isValid) && (
