@@ -52,10 +52,10 @@ class LogService {
       const query = `
         INSERT INTO audit_logs (
           user_id, action, database_name, table_name, 
-          record_id, old_values, new_values, ip_address, user_agent, timestamp
+          record_id, old_values, new_values, affected_rows, ip_address, user_agent, timestamp
         ) VALUES (
           @userId, @action, @databaseName, @tableName,
-          @recordId, @oldValues, @newValues, @ipAddress, @userAgent, GETDATE()
+          @recordId, @oldValues, @newValues, @affectedRows, @ipAddress, @userAgent, GETDATE()
         )
       `;
 
@@ -72,6 +72,7 @@ class LogService {
         .input("recordId", recordId)
         .input("oldValues", oldValues)
         .input("newValues", newValues)
+        .input("affectedRows", affectedRows)
         .input("ipAddress", ipAddress)
         .input("userAgent", userAgent)
         .query(query);
@@ -95,6 +96,7 @@ class LogService {
     tableName,
     newData,
     recordId = null,
+    affectedRows = 1,
     ipAddress = null,
     userAgent = null
   ) {
@@ -106,6 +108,7 @@ class LogService {
       tableName,
       recordId,
       newData,
+      affectedRows,
       ipAddress,
       userAgent,
     });
@@ -122,6 +125,7 @@ class LogService {
     oldData,
     newData,
     recordId = null,
+    affectedRows = 1,
     ipAddress = null,
     userAgent = null
   ) {
@@ -134,6 +138,7 @@ class LogService {
       recordId,
       oldData,
       newData,
+      affectedRows,
       ipAddress,
       userAgent,
     });
@@ -281,7 +286,7 @@ class LogService {
           a.id as Id, a.user_id as UserId, a.action as Action, 
           a.database_name as DatabaseName, a.table_name as TableName,
           a.record_id as RecordId, a.old_values as OldData, a.new_values as NewData,
-          a.ip_address as IPAddress, a.user_agent as UserAgent, a.timestamp as FechaCreacion,
+          a.affected_rows as AffectedRows, a.ip_address as IPAddress, a.user_agent as UserAgent, a.timestamp as FechaCreacion,
           u.username as Username
         FROM audit_logs a
         LEFT JOIN users u ON a.user_id = u.id
@@ -383,9 +388,10 @@ class LogService {
           const newData = log.NewData ? JSON.parse(log.NewData) : null;
 
           // Formatear la fecha como string ISO
-          const fechaCreacion = log.FechaCreacion instanceof Date 
-            ? log.FechaCreacion.toISOString() 
-            : log.FechaCreacion;
+          const fechaCreacion =
+            log.FechaCreacion instanceof Date
+              ? log.FechaCreacion.toISOString()
+              : log.FechaCreacion;
 
           return {
             ...log,
@@ -393,7 +399,7 @@ class LogService {
             RecordId: log.RecordId,
             OldData: oldData,
             NewData: newData,
-            AffectedRows: 1, // Por defecto, ya que no tenemos este campo
+            AffectedRows: log.AffectedRows || 1, // Usar el valor real de la base de datos
             FechaCreacion: fechaCreacion, // Asegurar que sea string
           };
         }),
