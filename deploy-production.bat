@@ -136,13 +136,21 @@ if errorlevel 1 (
 
 echo [SUCCESS] ✅ Frontend compilado
 
-REM Paso 6: Verificar base de datos
+REM Paso 6: Configurar entorno de producción
+echo [INFO] ⚙️ Configurando entorno de producción...
+
+REM Ejecutar script de configuración de entorno
+call configure-production-env.bat
+if errorlevel 1 (
+    echo [ERROR] Error configurando entorno de producción
+    pause
+    exit /b 1
+)
+
+REM Paso 7: Verificar base de datos
 echo [INFO] 🗄️ Verificando conexión a base de datos...
 
 cd backend
-REM Copiar archivo de producción
-copy env.production .env >nul
-
 REM Verificar conexión
 node -e "const { getPool } = require('./db'); require('dotenv').config(); async function testConnection() { try { const pool = await getPool(); console.log('✅ Conexión a base de datos exitosa'); process.exit(0); } catch (error) { console.error('❌ Error de conexión:', error.message); process.exit(1); } } testConnection();"
 if errorlevel 1 (
@@ -155,7 +163,7 @@ cd ..
 
 echo [SUCCESS] ✅ Conexión a base de datos verificada
 
-REM Paso 7: Configurar PM2
+REM Paso 8: Configurar PM2
 echo [INFO] ⚙️ Configurando PM2...
 
 REM Detener procesos existentes si están corriendo
@@ -166,7 +174,7 @@ pm2 startup >nul 2>&1
 
 echo [SUCCESS] ✅ PM2 configurado
 
-REM Paso 8: Iniciar aplicaciones con PM2
+REM Paso 9: Iniciar aplicaciones con PM2
 echo [INFO] 🚀 Iniciando aplicaciones con PM2...
 
 REM Iniciar con configuración de producción
@@ -182,7 +190,7 @@ pm2 save
 
 echo [SUCCESS] ✅ Aplicaciones iniciadas con PM2
 
-REM Paso 9: Verificar estado de las aplicaciones
+REM Paso 10: Verificar estado de las aplicaciones
 echo [INFO] 🔍 Verificando estado de las aplicaciones...
 
 REM Esperar a que las aplicaciones se inicien
@@ -206,7 +214,7 @@ if errorlevel 1 (
 
 echo [SUCCESS] ✅ Aplicaciones verificadas y funcionando
 
-REM Paso 10: Mostrar información del despliegue
+REM Paso 11: Mostrar información del despliegue
 echo.
 echo 🎉 DESPLIEGUE COMPLETADO EXITOSAMENTE
 echo ======================================
