@@ -278,11 +278,13 @@ class LogService {
 
       let query = `
         SELECT 
-          id as Id, user_id as UserId, action as Action, 
-          database_name as DatabaseName, table_name as TableName,
-          record_id as RecordId, old_values as OldData, new_values as NewData,
-          ip_address as IPAddress, user_agent as UserAgent, timestamp as FechaCreacion
-        FROM audit_logs 
+          a.id as Id, a.user_id as UserId, a.action as Action, 
+          a.database_name as DatabaseName, a.table_name as TableName,
+          a.record_id as RecordId, a.old_values as OldData, a.new_values as NewData,
+          a.ip_address as IPAddress, a.user_agent as UserAgent, a.timestamp as FechaCreacion,
+          u.username as Username
+        FROM audit_logs a
+        LEFT JOIN users u ON a.user_id = u.id
         WHERE 1=1
       `;
 
@@ -290,39 +292,40 @@ class LogService {
 
       // Aplicar filtros
       if (filters.action) {
-        query += " AND action = @action";
+        query += " AND a.action = @action";
         request.input("action", filters.action);
       }
 
       if (filters.databaseName) {
-        query += " AND database_name = @databaseName";
+        query += " AND a.database_name = @databaseName";
         request.input("databaseName", filters.databaseName);
       }
 
       if (filters.tableName) {
-        query += " AND table_name = @tableName";
+        query += " AND a.table_name = @tableName";
         request.input("tableName", filters.tableName);
       }
 
       if (filters.username) {
-        query += " AND user_id = @username";
-        request.input("username", filters.username);
+        query += " AND u.username LIKE @username";
+        request.input("username", `%${filters.username}%`);
       }
 
       if (filters.startDate) {
-        query += " AND timestamp >= @startDate";
+        query += " AND a.timestamp >= @startDate";
         request.input("startDate", filters.startDate);
       }
 
       if (filters.endDate) {
-        query += " AND timestamp <= @endDate";
+        query += " AND a.timestamp <= @endDate";
         request.input("endDate", filters.endDate);
       }
 
       // Query para contar el total de registros con los mismos filtros
       let countQuery = `
         SELECT COUNT(*) as total
-        FROM audit_logs 
+        FROM audit_logs a
+        LEFT JOIN users u ON a.user_id = u.id
         WHERE 1=1
       `;
 
@@ -330,32 +333,32 @@ class LogService {
 
       // Aplicar los mismos filtros al count
       if (filters.action) {
-        countQuery += " AND action = @action";
+        countQuery += " AND a.action = @action";
         countRequest.input("action", filters.action);
       }
 
       if (filters.databaseName) {
-        countQuery += " AND database_name = @databaseName";
+        countQuery += " AND a.database_name = @databaseName";
         countRequest.input("databaseName", filters.databaseName);
       }
 
       if (filters.tableName) {
-        countQuery += " AND table_name = @tableName";
+        countQuery += " AND a.table_name = @tableName";
         countRequest.input("tableName", filters.tableName);
       }
 
       if (filters.username) {
-        countQuery += " AND user_id = @username";
-        countRequest.input("username", filters.username);
+        countQuery += " AND u.username LIKE @username";
+        countRequest.input("username", `%${filters.username}%`);
       }
 
       if (filters.startDate) {
-        countQuery += " AND timestamp >= @startDate";
+        countQuery += " AND a.timestamp >= @startDate";
         countRequest.input("startDate", filters.startDate);
       }
 
       if (filters.endDate) {
-        countQuery += " AND timestamp <= @endDate";
+        countQuery += " AND a.timestamp <= @endDate";
         countRequest.input("endDate", filters.endDate);
       }
 
@@ -366,7 +369,7 @@ class LogService {
           .input("offset", offset)
           .query(
             query +
-              " ORDER BY timestamp DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY"
+              " ORDER BY a.timestamp DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY"
           ),
         countRequest.query(countQuery),
       ]);
@@ -381,7 +384,7 @@ class LogService {
           
           return {
             ...log,
-            Username: null, // No tenemos username en audit_logs
+            Username: log.Username, // Ahora viene del JOIN con users
             RecordId: log.RecordId,
             OldData: oldData,
             NewData: newData,
