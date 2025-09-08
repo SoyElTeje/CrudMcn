@@ -350,7 +350,7 @@ const LogsViewer: React.FC = () => {
                     {log.AffectedRows}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatTimestamp(log.Timestamp)}
+                    {formatTimestamp(log.FechaCreacion)}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
                     <details className="cursor-pointer">
