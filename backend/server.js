@@ -1143,6 +1143,7 @@ app.post(
             ignoreHeaders,
           },
           null, // recordId
+          result.successCount, // Número real de registros insertados
           req.ip,
           req.get("User-Agent")
         );
