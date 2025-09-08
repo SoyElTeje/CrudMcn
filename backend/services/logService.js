@@ -34,39 +34,34 @@ class LogService {
 
       const pool = await getPool();
 
-      // Verificar si la tabla LOGS existe
+      // Verificar si la tabla audit_logs existe
       const tableExistsQuery = `
         SELECT COUNT(*) as count 
         FROM INFORMATION_SCHEMA.TABLES 
-        WHERE TABLE_NAME = 'LOGS'
+        WHERE TABLE_NAME = 'audit_logs'
       `;
 
       const tableExistsResult = await pool.request().query(tableExistsQuery);
       const tableExists = tableExistsResult.recordset[0].count > 0;
 
       if (!tableExists) {
-        console.log("⚠️ Tabla LOGS no existe, no se puede registrar log");
+        console.log("⚠️ Tabla audit_logs no existe, no se puede registrar log");
         return;
       }
 
       const query = `
-        INSERT INTO LOGS (
-          UserId, Action, DatabaseName, TableName, 
-          Details, IPAddress, UserAgent, FechaCreacion
+        INSERT INTO audit_logs (
+          user_id, action, database_name, table_name, 
+          record_id, old_values, new_values, ip_address, user_agent, timestamp
         ) VALUES (
           @userId, @action, @databaseName, @tableName,
-          @details, @ipAddress, @userAgent, GETDATE()
+          @recordId, @oldValues, @newValues, @ipAddress, @userAgent, GETDATE()
         )
       `;
 
-      // Construir el campo Details con toda la información
-      const details = {
-        username,
-        recordId,
-        oldData,
-        newData,
-        affectedRows,
-      };
+      // Construir los valores antiguos y nuevos
+      const oldValues = oldData ? JSON.stringify(oldData) : null;
+      const newValues = newData ? JSON.stringify(newData) : null;
 
       await pool
         .request()
@@ -74,7 +69,9 @@ class LogService {
         .input("action", action)
         .input("databaseName", databaseName)
         .input("tableName", tableName)
-        .input("details", JSON.stringify(details))
+        .input("recordId", recordId)
+        .input("oldValues", oldValues)
+        .input("newValues", newValues)
         .input("ipAddress", ipAddress)
         .input("userAgent", userAgent)
         .query(query);
