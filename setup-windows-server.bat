@@ -194,3 +194,10 @@ echo [SUCCESS] 🎉 ¡Configuración de Windows Server completada!
 echo.
 echo Presiona cualquier tecla para continuar...
 pause >nul
+
+
+
+
+
+
+

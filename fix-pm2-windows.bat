@@ -171,3 +171,10 @@ echo [SUCCESS] 🎉 ¡PM2 reparado y listo para usar!
 echo.
 echo Presiona cualquier tecla para continuar...
 pause >nul
+
+
+
+
+
+
+

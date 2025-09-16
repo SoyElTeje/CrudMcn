@@ -220,9 +220,14 @@ async function buildSelectQuery(
 
   // Si necesitamos paginación, usar ROW_NUMBER() para compatibilidad
   if (limit && offset !== undefined) {
-    const orderColumn = sort && sort.column ? sort.column : (columns.length > 0 ? columns[0].COLUMN_NAME : 'id');
+    const orderColumn =
+      sort && sort.column
+        ? sort.column
+        : columns.length > 0
+        ? columns[0].COLUMN_NAME
+        : "id";
     const orderDirection = sort && sort.direction === "DESC" ? "DESC" : "ASC";
-    
+
     // Usar ROW_NUMBER() para paginación compatible con versiones más antiguas de SQL Server
     query = `
       SELECT * FROM (
@@ -232,7 +237,7 @@ async function buildSelectQuery(
       ) AS PaginatedResults
       WHERE RowNum > @offset AND RowNum <= @offset + @limit
     `;
-    
+
     request.input("offset", parseInt(offset));
     request.input("limit", parseInt(limit));
   } else {

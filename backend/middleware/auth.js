@@ -45,7 +45,7 @@ const requireAdmin = (req, res, next) => {
  * Middleware para verificar si el usuario tiene permisos específicos
  */
 const requirePermission = (permission) => {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: "Usuario no autenticado" });
     }
@@ -55,11 +55,42 @@ const requirePermission = (permission) => {
       return next();
     }
 
-    // Aquí puedes implementar lógica más granular de permisos
-    // Por ahora, solo permitimos administradores
-    return res
-      .status(403)
-      .json({ error: `Acceso denegado. Se requiere permiso: ${permission}` });
+    try {
+      const { dbName, tableName } = req.params;
+      const authService = require("../services/authService");
+
+      // Verificar permisos de tabla si se especifica
+      if (tableName) {
+        const hasPermission = await authService.checkTablePermission(
+          req.user.id,
+          dbName,
+          tableName,
+          permission
+        );
+
+        if (hasPermission) {
+          return next();
+        }
+      } else {
+        // Verificar permisos de base de datos
+        const hasPermission = await authService.checkDatabasePermission(
+          req.user.id,
+          dbName,
+          permission
+        );
+
+        if (hasPermission) {
+          return next();
+        }
+      }
+
+      return res
+        .status(403)
+        .json({ error: `Acceso denegado. Se requiere permiso: ${permission}` });
+    } catch (error) {
+      console.error("Error verificando permisos:", error);
+      return res.status(500).json({ error: "Error interno del servidor" });
+    }
   };
 };
 

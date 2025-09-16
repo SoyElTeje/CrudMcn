@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import axios from "axios";
 // API configuration
-const API_BASE_URL = import.meta.env.VITE_CURRENT_IP || "http://localhost:3001";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 import { Button } from "./ui/button";
 
 interface LoginModalProps {
@@ -43,27 +44,27 @@ export function LoginModal({ isOpen, onLogin }: LoginModalProps) {
     } catch (error: any) {
       // Extraer el mensaje de error correctamente
       let errorMessage = "Error de conexión";
-      
+
       if (error.response?.data) {
         const errorData = error.response.data;
-        
+
         // Si es un objeto de error complejo, extraer el mensaje
-        if (typeof errorData === 'object') {
+        if (typeof errorData === "object") {
           if (errorData.message) {
             errorMessage = errorData.message;
           } else if (errorData.error) {
             // Si error es un objeto, extraer el mensaje
-            if (typeof errorData.error === 'string') {
+            if (typeof errorData.error === "string") {
               errorMessage = errorData.error;
             } else if (errorData.error.message) {
               errorMessage = errorData.error.message;
             }
           }
-        } else if (typeof errorData === 'string') {
+        } else if (typeof errorData === "string") {
           errorMessage = errorData;
         }
       }
-      
+
       setError(errorMessage);
     } finally {
       setLoading(false);

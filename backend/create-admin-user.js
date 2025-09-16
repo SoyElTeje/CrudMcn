@@ -2,9 +2,9 @@
  * Script simple para crear solo el usuario admin
  */
 
-const sql = require('mssql');
-const bcrypt = require('bcrypt');
-require('dotenv').config();
+const sql = require("mssql");
+const bcrypt = require("bcrypt");
+require("dotenv").config();
 
 const config = {
   server: process.env.DB_SERVER,
@@ -13,19 +13,19 @@ const config = {
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
   options: {
-    encrypt: process.env.DB_ENCRYPT === 'true',
-    trustServerCertificate: process.env.DB_TRUST_CERT === 'true',
+    encrypt: process.env.DB_ENCRYPT === "true",
+    trustServerCertificate: process.env.DB_TRUST_CERT === "true",
     enableArithAbort: true,
   },
 };
 
 async function createAdminUser() {
   let pool;
-  
+
   try {
-    console.log('🔗 Conectando a la base de datos...');
+    console.log("🔗 Conectando a la base de datos...");
     pool = await sql.connect(config);
-    console.log('✅ Conectado exitosamente');
+    console.log("✅ Conectado exitosamente");
 
     // Verificar si el usuario admin ya existe
     const adminCheck = await pool.request().query(`
@@ -33,13 +33,11 @@ async function createAdminUser() {
     `);
 
     if (adminCheck.recordset.length > 0) {
-      console.log('⚠️ Usuario admin ya existe, actualizando contraseña...');
-      
-      const hashedPassword = await bcrypt.hash('Admin123!', 10);
-      
-      await pool.request()
-        .input('password', hashedPassword)
-        .query(`
+      console.log("⚠️ Usuario admin ya existe, actualizando contraseña...");
+
+      const hashedPassword = await bcrypt.hash("Admin123!", 10);
+
+      await pool.request().input("password", hashedPassword).query(`
           UPDATE users 
           SET password_hash = @password, 
               is_admin = 1, 
@@ -47,24 +45,24 @@ async function createAdminUser() {
               updated_at = GETDATE()
           WHERE username = 'admin'
         `);
-      
-      console.log('✅ Contraseña del usuario admin actualizada');
+
+      console.log("✅ Contraseña del usuario admin actualizada");
     } else {
-      console.log('👤 Creando usuario admin...');
-      
-      const hashedPassword = await bcrypt.hash('Admin123!', 10);
-      
-      await pool.request()
-        .input('username', 'admin')
-        .input('password', hashedPassword)
-        .input('email', 'admin@abmmcn.com')
-        .input('fullName', 'Administrador del Sistema')
-        .query(`
+      console.log("👤 Creando usuario admin...");
+
+      const hashedPassword = await bcrypt.hash("Admin123!", 10);
+
+      await pool
+        .request()
+        .input("username", "admin")
+        .input("password", hashedPassword)
+        .input("email", "admin@abmmcn.com")
+        .input("fullName", "Administrador del Sistema").query(`
           INSERT INTO users (username, password_hash, email, full_name, is_admin, is_active)
           VALUES (@username, @password, @email, @fullName, 1, 1)
         `);
-      
-      console.log('✅ Usuario admin creado');
+
+      console.log("✅ Usuario admin creado");
     }
 
     // Obtener ID del usuario admin
@@ -74,40 +72,37 @@ async function createAdminUser() {
     const adminId = adminResult.recordset[0].id;
 
     // Configurar permisos del admin
-    console.log('🔐 Configurando permisos del admin...');
-    
-    const databases = ['APPDATA', 'BD_ABM1', 'BD_ABM2', 'BI_EDITOR'];
+    console.log("🔐 Configurando permisos del admin...");
+
+    const databases = ["APPDATA", "BD_ABM1", "BD_ABM2", "BI_EDITOR"];
 
     for (const dbName of databases) {
-      const permCheck = await pool.request()
-        .input('userId', adminId)
-        .input('dbName', dbName)
-        .query(`
+      const permCheck = await pool
+        .request()
+        .input("userId", adminId)
+        .input("dbName", dbName).query(`
           SELECT id FROM user_permissions 
           WHERE user_id = @userId AND database_name = @dbName
         `);
 
       if (permCheck.recordset.length === 0) {
-        await pool.request()
-          .input('userId', adminId)
-          .input('dbName', dbName)
+        await pool.request().input("userId", adminId).input("dbName", dbName)
           .query(`
             INSERT INTO user_permissions (user_id, database_name, can_read, can_write, can_delete, can_export)
             VALUES (@userId, @dbName, 1, 1, 1, 1)
           `);
-        
+
         console.log(`✅ Permisos configurados para: ${dbName}`);
       }
     }
 
-    console.log('\n🎉 USUARIO ADMIN CONFIGURADO');
-    console.log('============================');
-    console.log('👤 Usuario: admin');
-    console.log('🔑 Contraseña: Admin123!');
-    console.log('🔐 Permisos: Completos en todas las bases de datos');
-
+    console.log("\n🎉 USUARIO ADMIN CONFIGURADO");
+    console.log("============================");
+    console.log("👤 Usuario: admin");
+    console.log("🔑 Contraseña: Admin123!");
+    console.log("🔐 Permisos: Completos en todas las bases de datos");
   } catch (error) {
-    console.error('❌ Error:', error);
+    console.error("❌ Error:", error);
     throw error;
   } finally {
     if (pool) {
@@ -120,11 +115,11 @@ async function createAdminUser() {
 if (require.main === module) {
   createAdminUser()
     .then(() => {
-      console.log('\n✅ Script completado');
+      console.log("\n✅ Script completado");
       process.exit(0);
     })
     .catch((error) => {
-      console.error('\n❌ Error:', error);
+      console.error("\n❌ Error:", error);
       process.exit(1);
     });
 }

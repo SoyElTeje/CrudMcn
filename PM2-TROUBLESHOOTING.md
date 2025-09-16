@@ -82,11 +82,13 @@ dir "\\.\pipe\" | findstr rpc
 ### Problema: PM2 no inicia
 
 **Síntomas:**
+
 ```
 Error: connect EPERM //./pipe/rpc.sock
 ```
 
 **Solución:**
+
 ```cmd
 # Ejecutar como Administrador
 fix-pm2-windows.bat
@@ -95,12 +97,14 @@ fix-pm2-windows.bat
 ### Problema: PM2 no responde
 
 **Síntomas:**
+
 ```
 pm2 list
 # No responde o da error
 ```
 
 **Solución:**
+
 ```cmd
 # Reiniciar PM2 daemon
 pm2 kill
@@ -110,12 +114,14 @@ pm2 ping
 ### Problema: Aplicaciones no se inician
 
 **Síntomas:**
+
 ```
 pm2 start app.js
 # Error o no inicia
 ```
 
 **Solución:**
+
 ```cmd
 # Verificar logs
 pm2 logs
@@ -128,12 +134,14 @@ pm2 start ecosystem.config.js --env production
 ### Problema: Permisos insuficientes
 
 **Síntomas:**
+
 ```
 EPERM errors
 Access denied
 ```
 
 **Solución:**
+
 ```cmd
 # Ejecutar PowerShell como Administrador
 # O ejecutar CMD como Administrador
@@ -282,3 +290,10 @@ type logs\backend-error.log
 **¡Problemas de PM2 solucionados!** 🎉
 
 Si sigues teniendo problemas, ejecuta `fix-pm2-windows.bat` como Administrador.
+
+
+
+
+
+
+

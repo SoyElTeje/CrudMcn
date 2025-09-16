@@ -106,7 +106,7 @@ router.post(
 router.put(
   "/users/:userId/password",
   authenticateToken,
-  validate(schemas.userId, "params"),
+  validate(schemas.userIdParam, "params"),
   validate(schemas.updatePassword),
   catchAsync(async (req, res) => {
     const { userId } = req.params;
@@ -141,6 +141,7 @@ router.put(
   "/users/:userId/admin",
   authenticateToken,
   requireAdmin,
+  validate(schemas.userIdParam, "params"),
   async (req, res) => {
     try {
       const { userId } = req.params;
@@ -170,6 +171,7 @@ router.delete(
   "/users/:userId",
   authenticateToken,
   requireAdmin,
+  validate(schemas.userIdParam, "params"),
   async (req, res) => {
     try {
       const { userId } = req.params;
@@ -192,6 +194,7 @@ router.delete(
 router.get(
   "/users/:userId/permissions",
   authenticateToken,
+  validate(schemas.userIdParam, "params"),
   async (req, res) => {
     try {
       const { userId } = req.params;
@@ -231,7 +234,7 @@ router.post(
   "/users/:userId/database-permissions",
   authenticateToken,
   requireAdmin,
-  validate(schemas.userId, "params"),
+  validate(schemas.userIdParam, "params"),
   validate(schemas.assignDatabasePermission),
   catchAsync(async (req, res) => {
     const { userId } = req.params;
@@ -265,7 +268,7 @@ router.post(
   "/users/:userId/table-permissions",
   authenticateToken,
   requireAdmin,
-  validate(schemas.userId, "params"),
+  validate(schemas.userIdParam, "params"),
   validate(schemas.assignTablePermission),
   catchAsync(async (req, res) => {
     const { userId } = req.params;
@@ -298,6 +301,7 @@ router.delete(
   "/users/:userId/database-permissions",
   authenticateToken,
   requireAdmin,
+  validate(schemas.userIdParam, "params"),
   async (req, res) => {
     try {
       const { userId } = req.params;
@@ -325,6 +329,7 @@ router.delete(
   "/users/:userId/table-permissions",
   authenticateToken,
   requireAdmin,
+  validate(schemas.userIdParam, "params"),
   async (req, res) => {
     try {
       const { userId } = req.params;

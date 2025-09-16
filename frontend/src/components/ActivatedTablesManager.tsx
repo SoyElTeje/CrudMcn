@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { formatDate } from "../lib/dateUtils";
 // API configuration
-const API_BASE_URL = import.meta.env.VITE_CURRENT_IP || "http://localhost:3001";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 import {
   Select,
   SelectTrigger,
@@ -78,15 +79,12 @@ const ActivatedTablesManager: React.FC = () => {
   const api = {
     get: async (url: string) => {
       const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${API_BASE_URL}${url}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}${url}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -96,17 +94,14 @@ const ActivatedTablesManager: React.FC = () => {
     },
     post: async (url: string, data: any) => {
       const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${API_BASE_URL}${url}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(data),
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}${url}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -116,17 +111,14 @@ const ActivatedTablesManager: React.FC = () => {
     },
     put: async (url: string, data: any) => {
       const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${API_BASE_URL}${url}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(data),
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}${url}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

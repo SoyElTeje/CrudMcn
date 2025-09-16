@@ -171,3 +171,10 @@ echo [SUCCESS] 🎉 ¡Configuración de entorno de producción completada!
 echo.
 echo Presiona cualquier tecla para continuar...
 pause >nul
+
+
+
+
+
+
+

@@ -209,3 +209,10 @@ if (require.main === module) {
 }
 
 module.exports = { checkTableStructures };
+
+
+
+
+
+
+
