@@ -128,3 +128,12 @@ PRINT '- VIEW DEFINITION en base de datos y esquema';
 
 
 
+
+
+
+
+
+
+
+
+

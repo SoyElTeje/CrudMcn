@@ -4,7 +4,8 @@ import { es } from "date-fns/locale";
 import { Pagination } from "./Pagination";
 import DateInput from "./ui/DateInput";
 // API configuration
-const API_BASE_URL = import.meta.env.VITE_CURRENT_IP || "http://localhost:3001";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
 interface LogEntry {
   Id: number;
@@ -18,6 +19,7 @@ interface LogEntry {
   NewData: any;
   AffectedRows: number;
   Timestamp: string;
+  FechaCreacion: string;
   IPAddress: string | null;
   UserAgent: string | null;
 }

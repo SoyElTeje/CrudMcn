@@ -342,6 +342,7 @@ test-env.bat
 ```
 
 **Salida esperada:**
+
 ```
 ✅ Todas las variables críticas están configuradas
 🚀 El sistema está listo para producción
@@ -350,6 +351,7 @@ test-env.bat
 ### Solución de Problemas de Variables
 
 **Problema: Variables no se cargan**
+
 ```cmd
 # Verificar que el archivo .env existe
 dir backend\.env
@@ -359,6 +361,7 @@ configure-production-env.bat
 ```
 
 **Problema: Error de conexión a BD**
+
 ```cmd
 # Verificar variables de BD
 test-env.bat

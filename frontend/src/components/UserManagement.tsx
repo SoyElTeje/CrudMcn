@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
 // API configuration
-const API_BASE_URL = import.meta.env.VITE_CURRENT_IP || "http://localhost:3001";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 import { formatDate } from "../lib/dateUtils";
 import {
   Table,
@@ -46,16 +46,15 @@ interface UserPermissions {
 }
 
 interface UserManagementProps {
-  token: string;
   isAdmin: boolean;
   api: any; // Agregar la instancia de axios del App.tsx
 }
 
-export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
+export function UserManagement({ isAdmin, api }: UserManagementProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [databases, setDatabases] = useState<Array<{ name: string }>>([]);
+  const [databases, setDatabases] = useState<string[]>([]);
   const [tables, setTables] = useState<Array<{ schema: string; name: string }>>(
     []
   );
@@ -124,7 +123,9 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
   // Cargar bases de datos
   const loadDatabases = async () => {
     try {
+      console.log("🔍 DEBUG - Cargando bases de datos...");
       const response = await api.get("/api/databases");
+      console.log("🔍 DEBUG - Respuesta de bases de datos:", response.data);
       setDatabases(response.data);
     } catch (error: any) {
       console.error("Error cargando bases de datos:", error);
@@ -155,18 +156,11 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
       setCreatingUser(true);
 
       // Debug: Verificar headers antes de la petición
+      console.log("🔍 DEBUG - API_BASE_URL:", API_BASE_URL);
+      console.log("🔍 DEBUG - URL completa:", `${API_BASE_URL}/api/auth/users`);
 
-      // Usar axios directamente con el token para evitar problemas con el interceptor
-      const response = await axios.post(
-        `${API_BASE_URL}/auth/users`,
-        newUser,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      // Usar la instancia de axios configurada que ya tiene el baseURL y el token
+      const response = await api.post("/api/auth/users", newUser);
 
       if (response.data.success) {
         setNewUser({ username: "", password: "", isAdmin: false });
@@ -266,15 +260,18 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
 
     try {
       setSavingPermissions(true);
+
+      // Convertir permisos booleanos a array de strings como espera el backend
+      const permissionsArray = [];
+      if (databasePermissions.hasAccess) {
+        permissionsArray.push("read", "write", "create", "delete");
+      }
+
       await api.post(
         `/api/auth/users/${selectedUserForPermissions.id}/database-permissions`,
         {
           databaseName: selectedDatabase,
-          permissions: {
-            canRead: databasePermissions.hasAccess,
-            canWrite: databasePermissions.hasAccess,
-            canDelete: databasePermissions.hasAccess,
-          },
+          permissions: permissionsArray,
         }
       );
       await loadUserPermissions(selectedUserForPermissions);
@@ -301,16 +298,19 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
 
     try {
       setSavingPermissions(true);
+
+      // Convertir permisos booleanos a array de strings como espera el backend
+      const permissionsArray = [];
+      if (tablePermissions.hasAccess) {
+        permissionsArray.push("read", "write", "create", "delete");
+      }
+
       await api.post(
         `/api/auth/users/${selectedUserForPermissions.id}/table-permissions`,
         {
           databaseName: selectedDatabase,
           tableName: selectedTable,
-          permissions: {
-            canRead: tablePermissions.hasAccess,
-            canWrite: tablePermissions.hasAccess,
-            canDelete: tablePermissions.hasAccess,
-          },
+          permissions: permissionsArray,
         }
       );
       await loadUserPermissions(selectedUserForPermissions);
@@ -399,6 +399,7 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
   useEffect(() => {
     if (isAdmin) {
       loadUsers();
+      loadDatabases();
     }
   }, [isAdmin]);
 
@@ -799,10 +800,10 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                           />
                         </SelectTrigger>
                         <SelectContent className="bg-white text-gray-900 border border-gray-200">
-                          {databases.map((db) => (
+                          {databases.map((db: string) => (
                             <SelectItem
-                              key={db.name}
-                              value={db.name}
+                              key={db}
+                              value={db}
                               className="text-gray-900 hover:bg-gray-100"
                             >
                               <div className="flex items-center">
@@ -819,7 +820,7 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                                     d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
                                   />
                                 </svg>
-                                {db.name}
+                                {db}
                               </div>
                             </SelectItem>
                           ))}
@@ -927,30 +928,36 @@ export function UserManagement({ token, isAdmin, api }: UserManagementProps) {
                             />
                           </SelectTrigger>
                           <SelectContent className="bg-white text-gray-900 border border-gray-200">
-                            {databases.map((db) => (
-                              <SelectItem
-                                key={db.name}
-                                value={db.name}
-                                className="text-gray-900 hover:bg-gray-100"
-                              >
-                                <div className="flex items-center">
-                                  <svg
-                                    className="w-4 h-4 mr-2 text-green-500"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
-                                    />
-                                  </svg>
-                                  {db.name}
-                                </div>
-                              </SelectItem>
-                            ))}
+                            {(() => {
+                              console.log(
+                                "🔍 DEBUG - Renderizando select de bases de datos, databases:",
+                                databases
+                              );
+                              return databases.map((db: string) => (
+                                <SelectItem
+                                  key={db}
+                                  value={db}
+                                  className="text-gray-900 hover:bg-gray-100"
+                                >
+                                  <div className="flex items-center">
+                                    <svg
+                                      className="w-4 h-4 mr-2 text-green-500"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+                                      />
+                                    </svg>
+                                    {db}
+                                  </div>
+                                </SelectItem>
+                              ));
+                            })()}
                           </SelectContent>
                         </Select>
                       </div>

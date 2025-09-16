@@ -6,8 +6,6 @@ class ExcelService {
   // Función para leer un archivo Excel y extraer los datos
   async readExcelFile(filePath, ignoreHeaders = false) {
     try {
-      
-
       // Verificar que el archivo existe
       if (!fs.existsSync(filePath)) {
         throw new Error(`El archivo no existe: ${filePath}`);
@@ -157,7 +155,6 @@ class ExcelService {
       );
       const insertableColumns = validation.insertableColumns;
 
-
       if (insertableColumns.length === 0) {
         throw new Error("No hay columnas válidas para insertar");
       }
@@ -169,7 +166,6 @@ class ExcelService {
         insertableColumns
       );
 
-
       // Construir la consulta de inserción
       const columnsList = insertableColumns.join(", ");
       const placeholders = insertableColumns.map((col) => `@${col}`).join(", ");
@@ -179,7 +175,6 @@ class ExcelService {
         VALUES (${placeholders})
       `;
 
-
       let successCount = 0;
       let errorCount = 0;
       const errors = [];
@@ -187,8 +182,6 @@ class ExcelService {
       // Insertar cada fila
       for (let i = 0; i < excelRows.length; i++) {
         const row = excelRows[i];
-
-
 
         try {
           // Crear objeto de parámetros con conversión de tipos
@@ -752,70 +745,82 @@ class ExcelService {
     filters = [],
     sort = null
   ) {
+    console.log("🔍 DEBUG - Iniciando exportación para:", {
+      databaseName,
+      tableName,
+      exportType,
+    });
+
     try {
+      // Obtener pool de conexión
       const pool = await getPool(databaseName);
-
-      // Import query builder
-      const { buildSelectQuery } = require("../utils/queryBuilder");
-
-      // Construir la consulta según el tipo de exportación
-      let query;
-      const request = pool.request();
-
-      if (exportType === "current_page" && limit !== null && offset !== null) {
-        // Exportar solo la página actual con filtros y ordenamiento
-        query = buildSelectQuery(
-          tableName,
-          filters,
-          sort,
-          limit,
-          offset,
-          request
-        );
-      } else {
-        // Exportar toda la tabla con filtros y ordenamiento
-        query = buildSelectQuery(tableName, filters, sort, null, null, request);
+      if (!pool) {
+        throw new Error("No se pudo obtener la conexión a la base de datos");
       }
 
-      // Ejecutar la consulta
+      // Crear consulta simple
+      const query = `SELECT TOP 100 * FROM [${tableName}]`;
+      console.log("🔍 DEBUG - Ejecutando consulta:", query);
+
+      // Ejecutar consulta
+      const request = pool.request();
       const result = await request.query(query);
 
-      if (result.recordset.length === 0) {
+      console.log("🔍 DEBUG - Resultado obtenido:", {
+        hasResult: !!result,
+        hasRecordset: !!result?.recordset,
+        isArray: Array.isArray(result?.recordset),
+        length: result?.recordset?.length,
+      });
+
+      // Validar resultado
+      if (!result || !result.recordset) {
+        throw new Error("La consulta no devolvió resultados válidos");
+      }
+
+      const data = result.recordset;
+
+      if (data.length === 0) {
         throw new Error("No hay datos para exportar");
       }
 
-      // Crear el archivo Excel
+      // Crear archivo Excel
+      console.log(
+        "🔍 DEBUG - Creando archivo Excel con",
+        data.length,
+        "registros"
+      );
+
       const workbook = XLSX.utils.book_new();
-
-      // Convertir los datos a formato de hoja de cálculo
-      const worksheet = XLSX.utils.json_to_sheet(result.recordset);
-
-      // Agregar la hoja al libro
+      const worksheet = XLSX.utils.json_to_sheet(data);
       XLSX.utils.book_append_sheet(workbook, worksheet, tableName);
 
-      // Generar nombre de archivo único
+      // Generar nombre y ruta del archivo
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const fileName = `${tableName}_${exportType}_${timestamp}.xlsx`;
+      const fileName = `${tableName}_export_${timestamp}.xlsx`;
       const filePath = `uploads/${fileName}`;
 
-      // Asegurar que el directorio existe
+      // Crear directorio si no existe
       if (!fs.existsSync("uploads")) {
         fs.mkdirSync("uploads", { recursive: true });
       }
 
-      // Escribir el archivo
+      // Escribir archivo
       XLSX.writeFile(workbook, filePath);
+
+      console.log("🔍 DEBUG - Archivo creado exitosamente:", filePath);
 
       return {
         filePath,
         fileName,
-        recordCount: result.recordset.length,
+        recordCount: data.length,
         exportType,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
-      console.error("Error exporting table to Excel:", error);
-      throw error;
+      console.error("🔍 DEBUG - Error en exportación:", error.message);
+      console.error("🔍 DEBUG - Stack trace:", error.stack);
+      throw new Error(`Error al exportar tabla: ${error.message}`);
     }
   }
 }

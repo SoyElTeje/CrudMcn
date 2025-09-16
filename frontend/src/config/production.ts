@@ -1,6 +1,6 @@
 export const productionConfig = {
   // URL del backend en producción
-  API_BASE_URL: process.env.VITE_API_BASE_URL || "http://192.168.1.31:3001",
+  API_BASE_URL: process.env.VITE_API_BASE_URL || "http://192.168.168.209:3001",
 
   // Configuración de timeout para requests
   REQUEST_TIMEOUT: 30000,

@@ -138,6 +138,16 @@ const schemas = {
     }),
   }),
 
+  // Parámetros de userId (para rutas que usan :userId)
+  userIdParam: Joi.object({
+    userId: Joi.number().integer().positive().required().messages({
+      "number.base": "El ID debe ser un número",
+      "number.integer": "El ID debe ser un número entero",
+      "number.positive": "El ID debe ser un número positivo",
+      "any.required": "El ID del usuario es requerido",
+    }),
+  }),
+
   // Query parameters para paginación
   pagination: Joi.object({
     page: Joi.number().integer().min(1).default(1).messages({

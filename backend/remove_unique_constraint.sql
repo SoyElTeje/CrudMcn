@@ -52,3 +52,12 @@ PRINT '💡 Las condiciones se aplicarán en secuencia durante la validación';
 
 
 
+
+
+
+
+
+
+
+
+

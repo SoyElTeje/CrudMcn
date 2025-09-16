@@ -101,3 +101,10 @@ echo [SUCCESS] ✅ Variables de entorno verificadas correctamente
 echo.
 echo Presiona cualquier tecla para continuar...
 pause >nul
+
+
+
+
+
+
+

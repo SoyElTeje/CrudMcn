@@ -310,11 +310,11 @@ class AuthService {
 
       switch (operation) {
         case "read":
-          return permission.CanRead === 1 || permission.CanRead === true;
+          return permission.can_read === 1 || permission.can_read === true;
         case "write":
-          return permission.CanWrite === 1 || permission.CanWrite === true;
+          return permission.can_write === 1 || permission.can_write === true;
         case "delete":
-          return permission.CanDelete === 1 || permission.CanDelete === true;
+          return permission.can_delete === 1 || permission.can_delete === true;
         default:
           return false;
       }
@@ -377,7 +377,7 @@ class AuthService {
 
       // Verificar si tiene permisos en al menos una tabla de la base de datos
       const tablePermissionsQuery =
-        "SELECT COUNT(*) as count FROM USER_TABLE_PERMISSIONS WHERE UserId = @userId AND DatabaseName = @databaseName";
+        "SELECT COUNT(*) as count FROM user_permissions WHERE user_id = @userId AND database_name = @databaseName AND table_name IS NOT NULL";
       const tablePermissionsResult = await pool
         .request()
         .input("userId", userId)
@@ -394,6 +394,10 @@ class AuthService {
   // Función para verificar permisos de usuario en una tabla específica
   async checkTablePermission(userId, databaseName, tableName, operation) {
     try {
+      console.log(
+        `🔍 DEBUG - checkTablePermission: userId=${userId}, databaseName=${databaseName}, tableName=${tableName}, operation=${operation}`
+      );
+
       // Verificar si el usuario es admin
       const pool = await getPool();
 
@@ -436,7 +440,7 @@ class AuthService {
 
       // Verificar permisos específicos de la tabla
       const permissionQuery =
-        "SELECT * FROM USER_TABLE_PERMISSIONS WHERE UserId = @userId AND DatabaseName = @databaseName AND TableName = @tableName";
+        "SELECT * FROM user_permissions WHERE user_id = @userId AND database_name = @databaseName AND table_name = @tableName";
       const permissionResult = await pool
         .request()
         .input("userId", userId)
@@ -444,7 +448,18 @@ class AuthService {
         .input("tableName", tableName)
         .query(permissionQuery);
 
+      console.log(
+        `🔍 DEBUG - permissionResult.recordset.length: ${permissionResult.recordset.length}`
+      );
+      console.log(
+        `🔍 DEBUG - permissionResult.recordset:`,
+        permissionResult.recordset
+      );
+
       if (permissionResult.recordset.length === 0) {
+        console.log(
+          `🔍 DEBUG - No permisos específicos de tabla encontrados, verificando permisos de base de datos`
+        );
         // Si no hay permisos específicos de tabla, verificar permisos de base de datos
         return await this.checkDatabasePermission(
           userId,
@@ -454,15 +469,39 @@ class AuthService {
       }
 
       const permission = permissionResult.recordset[0];
+      console.log(`🔍 DEBUG - permission encontrado:`, permission);
 
       switch (operation) {
         case "read":
-          return permission.CanRead === 1 || permission.CanRead === true;
+          const canRead =
+            permission.can_read === 1 || permission.can_read === true;
+          console.log(
+            `🔍 DEBUG - can_read: ${permission.can_read}, resultado: ${canRead}`
+          );
+          return canRead;
         case "write":
-          return permission.CanWrite === 1 || permission.CanWrite === true;
+          const canWrite =
+            permission.can_write === 1 || permission.can_write === true;
+          console.log(
+            `🔍 DEBUG - can_write: ${permission.can_write}, resultado: ${canWrite}`
+          );
+          return canWrite;
         case "delete":
-          return permission.CanDelete === 1 || permission.CanDelete === true;
+          const canDelete =
+            permission.can_delete === 1 || permission.can_delete === true;
+          console.log(
+            `🔍 DEBUG - can_delete: ${permission.can_delete}, resultado: ${canDelete}`
+          );
+          return canDelete;
+        case "create":
+          const canCreate =
+            permission.can_create === 1 || permission.can_create === true;
+          console.log(
+            `🔍 DEBUG - can_create: ${permission.can_create}, resultado: ${canCreate}`
+          );
+          return canCreate;
         default:
+          console.log(`🔍 DEBUG - operación no reconocida: ${operation}`);
           return false;
       }
     } catch (error) {
@@ -580,20 +619,28 @@ class AuthService {
   // Función para asignar permisos de tabla específica a un usuario
   async assignTablePermission(userId, databaseName, tableName, permissions) {
     try {
-      const {
-        canRead = true,
-        canWrite = false,
-        canDelete = false,
-        canCreate = false,
-      } = permissions;
+      console.log(
+        `🔍 DEBUG - assignTablePermission: userId=${userId}, databaseName=${databaseName}, tableName=${tableName}, permissions=`,
+        permissions
+      );
+
+      // Por defecto, asignar todos los permisos como true cuando se asigna acceso a una tabla
+      let canRead = true;
+      let canWrite = true;
+      let canDelete = true;
+      let canCreate = true;
+
+      console.log(
+        `🔍 DEBUG - Permisos por defecto: canRead=${canRead}, canWrite=${canWrite}, canDelete=${canDelete}, canCreate=${canCreate}`
+      );
 
       const pool = await getPool();
 
-      // Verificar si la tabla USER_TABLE_PERMISSIONS existe
+      // Verificar si la tabla user_permissions existe
       const tableExistsQuery = `
         SELECT COUNT(*) as count 
         FROM INFORMATION_SCHEMA.TABLES 
-        WHERE TABLE_NAME = 'USER_TABLE_PERMISSIONS'
+        WHERE TABLE_NAME = 'user_permissions'
       `;
 
       const tableExistsResult = await pool.request().query(tableExistsQuery);
@@ -601,24 +648,25 @@ class AuthService {
 
       if (!tableExists) {
         console.log(
-          "⚠️ Tabla USER_TABLE_PERMISSIONS no existe, no se puede asignar permiso"
+          "⚠️ Tabla user_permissions no existe, no se puede asignar permiso"
         );
         return false;
       }
 
       const query = `
-        MERGE USER_TABLE_PERMISSIONS AS target
-        USING (SELECT @userId AS UserId, @databaseName AS DatabaseName, @tableName AS TableName) AS source
-        ON target.UserId = source.UserId AND target.DatabaseName = source.DatabaseName AND target.TableName = source.TableName
+        MERGE user_permissions AS target
+        USING (SELECT @userId AS user_id, @databaseName AS database_name, @tableName AS table_name) AS source
+        ON target.user_id = source.user_id AND target.database_name = source.database_name AND target.table_name = source.table_name
         WHEN MATCHED THEN
           UPDATE SET 
-            CanRead = @canRead,
-            CanWrite = @canWrite,
-            CanDelete = @canDelete,
-            CanCreate = @canCreate
+            can_read = @canRead,
+            can_write = @canWrite,
+            can_delete = @canDelete,
+            can_create = @canCreate,
+            updated_at = GETDATE()
         WHEN NOT MATCHED THEN
-          INSERT (UserId, DatabaseName, TableName, CanRead, CanWrite, CanDelete, CanCreate)
-          VALUES (@userId, @databaseName, @tableName, @canRead, @canWrite, @canDelete, @canCreate);
+          INSERT (user_id, database_name, table_name, can_read, can_write, can_delete, can_create, created_at, updated_at)
+          VALUES (@userId, @databaseName, @tableName, @canRead, @canWrite, @canDelete, @canCreate, GETDATE(), GETDATE());
       `;
 
       await pool
@@ -650,19 +698,23 @@ class AuthService {
   // Función para asignar permisos de base de datos a un usuario
   async assignDatabasePermission(userId, databaseName, permissions) {
     try {
-      const {
-        canRead = true,
-        canWrite = false,
-        canDelete = false,
-      } = permissions;
+      // Por defecto, asignar todos los permisos como true cuando se asigna acceso a una base de datos
+      let canRead = true;
+      let canWrite = true;
+      let canDelete = true;
+      let canCreate = true;
+
+      console.log(
+        `🔍 DEBUG - Permisos de base de datos por defecto: canRead=${canRead}, canWrite=${canWrite}, canDelete=${canDelete}, canCreate=${canCreate}`
+      );
 
       const pool = await getPool();
 
-      // Verificar si la tabla USER_DATABASE_PERMISSIONS existe
+      // Verificar si la tabla user_permissions existe
       const tableExistsQuery = `
         SELECT COUNT(*) as count 
         FROM INFORMATION_SCHEMA.TABLES 
-        WHERE TABLE_NAME = 'USER_DATABASE_PERMISSIONS'
+        WHERE TABLE_NAME = 'user_permissions'
       `;
 
       const tableExistsResult = await pool.request().query(tableExistsQuery);
@@ -670,23 +722,25 @@ class AuthService {
 
       if (!tableExists) {
         console.log(
-          "⚠️ Tabla USER_DATABASE_PERMISSIONS no existe, no se puede asignar permiso"
+          "⚠️ Tabla user_permissions no existe, no se puede asignar permiso"
         );
         return false;
       }
 
       const query = `
-        MERGE USER_DATABASE_PERMISSIONS AS target
-        USING (SELECT @userId AS UserId, @databaseName AS DatabaseName) AS source
-        ON target.UserId = source.UserId AND target.DatabaseName = source.DatabaseName
+        MERGE user_permissions AS target
+        USING (SELECT @userId AS user_id, @databaseName AS database_name, NULL AS table_name) AS source
+        ON target.user_id = source.user_id AND target.database_name = source.database_name AND target.table_name IS NULL
         WHEN MATCHED THEN
           UPDATE SET 
-            CanRead = @canRead,
-            CanWrite = @canWrite,
-            CanDelete = @canDelete
+            can_read = @canRead,
+            can_write = @canWrite,
+            can_delete = @canDelete,
+            can_create = @canCreate,
+            updated_at = GETDATE()
         WHEN NOT MATCHED THEN
-          INSERT (UserId, DatabaseName, CanRead, CanWrite, CanDelete)
-          VALUES (@userId, @databaseName, @canRead, @canWrite, @canDelete);
+          INSERT (user_id, database_name, table_name, can_read, can_write, can_delete, can_create, created_at, updated_at)
+          VALUES (@userId, @databaseName, NULL, @canRead, @canWrite, @canDelete, @canCreate, GETDATE(), GETDATE());
       `;
 
       await pool
@@ -696,6 +750,7 @@ class AuthService {
         .input("canRead", canRead ? 1 : 0)
         .input("canWrite", canWrite ? 1 : 0)
         .input("canDelete", canDelete ? 1 : 0)
+        .input("canCreate", canCreate ? 1 : 0)
         .query(query);
 
       return true;
@@ -750,11 +805,11 @@ class AuthService {
     try {
       const pool = await getPool();
 
-      // Verificar si la tabla USER_TABLE_PERMISSIONS existe
+      // Verificar si la tabla user_permissions existe
       const tableExistsQuery = `
         SELECT COUNT(*) as count 
         FROM INFORMATION_SCHEMA.TABLES 
-        WHERE TABLE_NAME = 'USER_TABLE_PERMISSIONS'
+        WHERE TABLE_NAME = 'user_permissions'
       `;
 
       const tableExistsResult = await pool.request().query(tableExistsQuery);
@@ -762,14 +817,14 @@ class AuthService {
 
       if (!tableExists) {
         console.log(
-          "⚠️ Tabla USER_TABLE_PERMISSIONS no existe, no se puede eliminar permiso"
+          "⚠️ Tabla user_permissions no existe, no se puede eliminar permiso"
         );
         return false;
       }
 
       const query = `
-        DELETE FROM USER_TABLE_PERMISSIONS 
-        WHERE UserId = @userId AND DatabaseName = @databaseName AND TableName = @tableName
+        DELETE FROM user_permissions 
+        WHERE user_id = @userId AND database_name = @databaseName AND table_name = @tableName
       `;
 
       await pool

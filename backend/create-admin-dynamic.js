@@ -99,8 +99,8 @@ async function createAdmin() {
         `);
 
       if (permCheck.recordset.length === 0) {
-         await pool.request().input("userId", adminId).input("dbName", dbName)
-           .query(`
+        await pool.request().input("userId", adminId).input("dbName", dbName)
+          .query(`
              INSERT INTO user_permissions (user_id, database_name, can_read, can_write, can_delete, can_create)
              VALUES (@userId, @dbName, 1, 1, 1, 1)
            `);

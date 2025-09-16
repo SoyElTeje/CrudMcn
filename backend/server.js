@@ -1,7 +1,6 @@
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
-const fs = require("fs");
 const { getPool } = require("./db");
 const authRoutes = require("./routes/auth");
 const healthRoutes = require("./routes/health");
@@ -32,7 +31,34 @@ const excelService = require("./services/excelService");
 const { errorHandler, notFound } = require("./middleware/errorHandler");
 const logger = require("./config/logger");
 
-require("dotenv").config();
+// Cargar variables de entorno con ruta explícita
+const envPath = __dirname + "/.env";
+const envProductionPath = __dirname + "/env.production";
+const envDevelopmentPath = __dirname + "/env.development";
+
+console.log("🔍 DEBUG - Ruta del archivo .env:", envPath);
+
+const fs = require("fs");
+if (fs.existsSync(envPath)) {
+  console.log("✅ Archivo .env encontrado");
+  require("dotenv").config({ path: envPath });
+} else if (fs.existsSync(envProductionPath)) {
+  console.log("✅ Archivo env.production encontrado");
+  require("dotenv").config({ path: envProductionPath });
+} else if (fs.existsSync(envDevelopmentPath)) {
+  console.log("✅ Archivo env.development encontrado");
+  require("dotenv").config({ path: envDevelopmentPath });
+} else {
+  console.log("❌ Ningún archivo de configuración encontrado en:", __dirname);
+}
+
+// Debug temporal - verificar variables de entorno
+console.log("🔍 DEBUG - Variables de entorno:");
+console.log("DB_SERVER:", process.env.DB_SERVER);
+console.log("DB_DATABASE:", process.env.DB_DATABASE);
+console.log("DB_USER:", process.env.DB_USER);
+console.log("PORT:", process.env.PORT);
+console.log("NODE_ENV:", process.env.NODE_ENV);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -1356,6 +1382,16 @@ app.get(
       const { dbName, tableName } = req.params;
       const { exportType = "all", limit, offset, filters, sort } = req.query;
 
+      console.log("🔍 DEBUG - Ruta de exportación Excel iniciada");
+      console.log("🔍 DEBUG - Parámetros:", {
+        dbName,
+        tableName,
+        exportType,
+        limit,
+        offset,
+      });
+      console.log("🔍 DEBUG - Usuario:", req.user);
+
       console.log(
         `📊 Exportando datos de ${dbName}.${tableName} - Tipo: ${exportType}`
       );
@@ -1389,6 +1425,16 @@ app.get(
       }
 
       // Procesar la exportación
+      console.log("🔍 DEBUG - Llamando a exportTableToExcel con parámetros:", {
+        dbName,
+        tableName,
+        exportType,
+        limit,
+        offset,
+        parsedFilters,
+        parsedSort,
+      });
+
       const result = await excelService.exportTableToExcel(
         dbName,
         tableName,
@@ -1398,6 +1444,15 @@ app.get(
         parsedFilters,
         parsedSort
       );
+
+      console.log("🔍 DEBUG - Resultado de exportTableToExcel:", result);
+
+      // Verificar que el resultado sea válido
+      if (!result) {
+        throw new Error(
+          "La función de exportación no devolvió un resultado válido"
+        );
+      }
 
       // Registrar log de exportación de Excel
       await logService.logExport(
@@ -1442,6 +1497,47 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// Endpoint de prueba para debuggear excelService
+app.get(
+  "/api/debug/excel-export/:dbName/:tableName",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { dbName, tableName } = req.params;
+      console.log("🔍 DEBUG - Endpoint de prueba iniciado para:", {
+        dbName,
+        tableName,
+      });
+
+      // Probar paso a paso
+      console.log("🔍 DEBUG - Paso 1: Importando excelService");
+      const excelService = require("./services/excelService");
+
+      console.log("🔍 DEBUG - Paso 2: Llamando a exportTableToExcel");
+      const result = await excelService.exportTableToExcel(
+        dbName,
+        tableName,
+        "all"
+      );
+
+      console.log("🔍 DEBUG - Paso 3: Resultado obtenido:", result);
+
+      res.json({
+        success: true,
+        result: result,
+        message: "Exportación exitosa",
+      });
+    } catch (error) {
+      console.error("🔍 DEBUG - Error en endpoint de prueba:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        stack: error.stack,
+      });
+    }
+  }
+);
+
 // Manejo de rutas no encontradas (debe ir antes del catch-all)
 app.all("*", notFound);
 
@@ -1463,7 +1559,7 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "frontend", "dist", "index.html"));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, "0.0.0.0", () => {
   logger.info(`🚀 Server running on port ${PORT}`);
   logger.info(`📊 Trial endpoint: http://localhost:${PORT}/api/trial/table`);
   logger.info(`🔍 Health check: http://localhost:${PORT}/api/health`);

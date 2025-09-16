@@ -66,9 +66,9 @@ class LogService {
       // Convertir recordId a int si es posible, o null si no
       let recordIdInt = null;
       if (recordId) {
-        if (typeof recordId === 'number') {
+        if (typeof recordId === "number") {
           recordIdInt = recordId;
-        } else if (typeof recordId === 'string') {
+        } else if (typeof recordId === "string") {
           // Intentar extraer un ID numérico del string
           const match = recordId.match(/\d+/);
           if (match) {

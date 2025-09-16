@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 // API configuration
-const API_BASE_URL = import.meta.env.VITE_CURRENT_IP || "http://localhost:3001";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 import {
   Table,
   TableHeader,
@@ -597,9 +598,18 @@ function App() {
       // Limpiar selección si el registro eliminado estaba seleccionado
       setSelectedRecords((prev) =>
         prev.filter((record) => {
-          return !tableStructure.primaryKeys.every(
-            (key) => record[key] === deletingRecord[key]
-          );
+          // Usar una comparación más robusta
+          if (
+            tableStructure?.primaryKeys &&
+            tableStructure.primaryKeys.length > 0
+          ) {
+            return !tableStructure.primaryKeys.every(
+              (key) => record[key] === deletingRecord[key]
+            );
+          } else {
+            // Si no hay claves primarias definidas, comparar todos los campos
+            return JSON.stringify(record) !== JSON.stringify(deletingRecord);
+          }
         })
       );
 
@@ -619,9 +629,18 @@ function App() {
     } else {
       setSelectedRecords((prev) =>
         prev.filter((r) => {
-          return !tableStructure?.primaryKeys.every(
-            (key) => r[key] === record[key]
-          );
+          // Usar una comparación más robusta
+          if (
+            tableStructure?.primaryKeys &&
+            tableStructure.primaryKeys.length > 0
+          ) {
+            return !tableStructure.primaryKeys.every(
+              (key) => r[key] === record[key]
+            );
+          } else {
+            // Si no hay claves primarias definidas, comparar todos los campos
+            return JSON.stringify(r) !== JSON.stringify(record);
+          }
         })
       );
     }
@@ -1185,7 +1204,6 @@ function App() {
 
               return (
                 <UserManagement
-                  token={token!}
                   isAdmin={currentUser?.isAdmin || false}
                   api={api}
                 />
@@ -1514,10 +1532,23 @@ function App() {
                             <TableBody>
                               {tableData.data.map((row, i) => {
                                 const isSelected = selectedRecords.some(
-                                  (record) =>
-                                    tableStructure?.primaryKeys.every(
-                                      (key) => record[key] === row[key]
-                                    )
+                                  (record) => {
+                                    // Usar una comparación más robusta
+                                    if (
+                                      tableStructure?.primaryKeys &&
+                                      tableStructure.primaryKeys.length > 0
+                                    ) {
+                                      return tableStructure.primaryKeys.every(
+                                        (key) => record[key] === row[key]
+                                      );
+                                    } else {
+                                      // Si no hay claves primarias definidas, comparar todos los campos
+                                      return (
+                                        JSON.stringify(record) ===
+                                        JSON.stringify(row)
+                                      );
+                                    }
+                                  }
                                 );
 
                                 return (
