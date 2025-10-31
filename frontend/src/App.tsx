@@ -200,6 +200,9 @@ function App() {
   const [activeFilters, setActiveFilters] = useState<any[]>([]);
   const [activeSort, setActiveSort] = useState<any | null>(null);
 
+  // Estado para manejar usuarios sin acceso a tablas
+  const [noTableAccess, setNoTableAccess] = useState(false);
+
   // Configurar axios con interceptor para token
   const api = axios.create({
     baseURL: API_BASE_URL,
@@ -217,12 +220,34 @@ function App() {
   api.interceptors.response.use(
     (response) => response,
     (error) => {
-      // Si el error es 401 (Unauthorized) o 403 (Forbidden), hacer logout automático
-      if (error.response?.status === 401 || error.response?.status === 403) {
+      // Si el error es 401 (Unauthorized), hacer logout automático
+      if (error.response?.status === 401) {
         console.log(
           "Token expirado o inválido, cerrando sesión automáticamente"
         );
         handleLogout();
+      }
+      // Para errores 403, solo hacer logout si es un error de autenticación, no de permisos de tabla
+      else if (error.response?.status === 403) {
+        // Verificar si es un error de autenticación (token inválido) o de permisos de tabla
+        const isAuthError =
+          error.response?.data?.error?.includes("Token") ||
+          error.response?.data?.error?.includes("token") ||
+          error.response?.data?.error?.includes("autenticación") ||
+          error.response?.data?.error?.includes("authentication");
+
+        if (isAuthError) {
+          console.log(
+            "Error de autenticación detectado, cerrando sesión automáticamente"
+          );
+          handleLogout();
+        } else {
+          // Es un error de permisos de tabla, no cerrar sesión
+          console.log(
+            "Error de permisos de tabla:",
+            error.response?.data?.error
+          );
+        }
       }
       return Promise.reject(error);
     }
@@ -245,6 +270,7 @@ function App() {
     setIsAuthenticated(false);
     setShowLogin(true);
     setCurrentView("database");
+    setNoTableAccess(false);
     localStorage.removeItem("token");
     localStorage.removeItem("user");
   };
@@ -911,27 +937,19 @@ function App() {
 
   // Función para cargar todas las tablas accesibles
   const fetchAccessibleTables = async () => {
-    console.log(
-      "🔍 Debug: fetchAccessibleTables called, isAuthenticated:",
-      isAuthenticated
-    );
     if (!isAuthenticated) {
-      console.log("🔍 Debug: Not authenticated, returning");
       return;
     }
 
     try {
       // Obtener solo las bases de datos a las que el usuario tiene acceso
-      console.log("🔍 Debug: Calling /api/databases");
       const res = await api.get("/api/databases");
       const dbList = res.data;
-      console.log("🔍 Debug: Databases received:", dbList);
 
       const allTables: TableInfo[] = [];
       for (const db of dbList) {
         // Saltar la base de datos de la aplicación
         if (db === APP_DATABASE) {
-          console.log(`Omitiendo base de datos de la aplicación: ${db}`);
           continue;
         }
 
@@ -952,20 +970,23 @@ function App() {
           // Continuar con las otras bases de datos
         }
       }
-      console.log("🔍 Debug: Tablas obtenidas:", allTables);
       setTables(allTables);
+
+      // Verificar si el usuario no tiene acceso a ninguna tabla
+      if (allTables.length === 0) {
+        setNoTableAccess(true);
+      } else {
+        setNoTableAccess(false);
+      }
     } catch (error) {
       console.error("Error fetching accessible databases:", error);
       setTables([]);
+      setNoTableAccess(true);
     }
   };
 
   // Fetch accessible databases and their tables on mount
   useEffect(() => {
-    console.log(
-      "🔍 Debug: useEffect triggered, isAuthenticated:",
-      isAuthenticated
-    );
     fetchAccessibleTables();
   }, [isAuthenticated]);
 
@@ -1196,19 +1217,7 @@ function App() {
                 ← Volver a las tablas
               </Button>
             </div>
-            {(() => {
-              console.log(
-                "🔍 Debug: Token en App.tsx antes de pasar a UserManagement:",
-                token
-              );
-
-              return (
-                <UserManagement
-                  isAdmin={currentUser?.isAdmin || false}
-                  api={api}
-                />
-              );
-            })()}
+            <UserManagement isAdmin={currentUser?.isAdmin || false} api={api} />
           </>
         ) : currentView === "logs" ? (
           <>
@@ -1239,12 +1248,65 @@ function App() {
         ) : (
           <>
             {/* Vista de tarjetas de tablas */}
-            {console.log(
-              "🔍 Debug: Render - tables.length:",
-              tables.length,
-              "showTableCards:",
-              showTableCards
+
+            {/* Mensaje para usuarios sin acceso a tablas */}
+            {noTableAccess && (
+              <div className="bg-card border border-border/50 rounded-xl p-6 sm:p-8 shadow-lg backdrop-blur-sm text-center">
+                <div className="mb-6">
+                  <svg
+                    className="w-16 h-16 mx-auto text-gray-400 mb-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1}
+                      d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                    />
+                  </svg>
+                  <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-2">
+                    Sin acceso a tablas
+                  </h2>
+                  <p className="text-muted-foreground text-sm sm:text-base max-w-md mx-auto">
+                    Tu cuenta no tiene permisos para acceder a ninguna tabla en
+                    este momento. Contacta al administrador del sistema para
+                    solicitar acceso.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <Button
+                    onClick={() => fetchAccessibleTables()}
+                    variant="outline"
+                    className="text-sm"
+                  >
+                    <svg
+                      className="w-4 h-4 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                    Actualizar
+                  </Button>
+                  <Button
+                    onClick={handleLogout}
+                    variant="outline"
+                    className="text-sm"
+                  >
+                    Cerrar sesión
+                  </Button>
+                </div>
+              </div>
             )}
+
             {tables.length > 0 && showTableCards && (
               <div className="bg-card border border-border/50 rounded-xl p-4 sm:p-6 mb-6 sm:mb-8 shadow-lg backdrop-blur-sm">
                 <div className="flex items-center justify-between mb-4 sm:mb-6">
@@ -1793,6 +1855,8 @@ function App() {
           recordsPerPage={recordsPerPage}
           totalRecords={totalRecords}
           token={token || ""}
+          activeFilters={activeFilters}
+          activeSort={activeSort}
         />
 
         {/* Modal de errores de validación */}

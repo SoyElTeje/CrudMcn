@@ -469,7 +469,6 @@ class AuthService {
       }
 
       const permission = permissionResult.recordset[0];
-      console.log(`🔍 DEBUG - permission encontrado:`, permission);
 
       switch (operation) {
         case "read":
@@ -501,7 +500,6 @@ class AuthService {
           );
           return canCreate;
         default:
-          console.log(`🔍 DEBUG - operación no reconocida: ${operation}`);
           return false;
       }
     } catch (error) {

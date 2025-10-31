@@ -176,31 +176,11 @@ const ActivatedTablesManager: React.FC = () => {
     tableName: string
   ) => {
     try {
-      console.log(`🔍 Fetching conditions for ${databaseName}.${tableName}...`);
-
       const data = await api.get(
         `/api/activated-tables/conditions/${databaseName}/${tableName}`
       );
 
-      console.log(
-        "📥 Conditions received from backend:",
-        JSON.stringify(data, null, 2)
-      );
-      console.log("📊 Data type:", typeof data);
-      console.log("📊 Is array:", Array.isArray(data));
-      console.log("📊 Length:", data?.length);
-
-      if (data && Array.isArray(data) && data.length > 0) {
-        console.log("🔍 First condition details:");
-        console.log("  - columnName:", data[0].columnName);
-        console.log("  - dataType:", data[0].dataType);
-        console.log("  - conditionType:", data[0].conditionType);
-        console.log("  - conditionValue:", data[0].conditionValue);
-        console.log("  - isRequired:", data[0].isRequired);
-      }
-
       setConditions(data);
-      console.log("✅ Conditions set in state");
     } catch (err) {
       console.error("❌ Error fetching table conditions:", err);
     }
@@ -244,13 +224,6 @@ const ActivatedTablesManager: React.FC = () => {
     tableName: string
   ) => {
     try {
-      console.log("🔍 Debug: Datos antes de enviar al backend:");
-      console.log("  - databaseName:", databaseName);
-      console.log("  - tableName:", tableName);
-      console.log("  - conditions:", JSON.stringify(conditions, null, 2));
-      console.log("  - conditions.length:", conditions.length);
-      console.log("  - description:", description);
-
       // Verificar que conditions no esté vacío
       if (!conditions || conditions.length === 0) {
         console.error("❌ No hay condiciones para enviar");
@@ -261,10 +234,6 @@ const ActivatedTablesManager: React.FC = () => {
       // Verificar que cada condición tenga todos los campos requeridos
       for (let i = 0; i < conditions.length; i++) {
         const condition = conditions[i];
-        console.log(
-          `🔍 Validando condición ${i + 1}:`,
-          JSON.stringify(condition, null, 2)
-        );
 
         if (!condition.columnName) {
           console.error(`❌ Condición ${i + 1} no tiene columnName`);
@@ -285,7 +254,6 @@ const ActivatedTablesManager: React.FC = () => {
         }
       }
 
-      console.log("📤 Enviando request al backend...");
       const response = await api.put(
         `/api/activated-tables/conditions/${databaseName}/${tableName}`,
         {
@@ -293,8 +261,6 @@ const ActivatedTablesManager: React.FC = () => {
           description,
         }
       );
-
-      console.log("✅ Respuesta del backend:", response);
 
       setError(null);
       setSuccess("Condiciones y descripción actualizadas exitosamente");
@@ -335,22 +301,8 @@ const ActivatedTablesManager: React.FC = () => {
   };
 
   const handleAddCondition = (newCondition: TableCondition) => {
-    console.log("🔍 Debug: Agregando nueva condición:");
-    console.log("  - newCondition:", JSON.stringify(newCondition, null, 2));
-    console.log(
-      "  - conditions actuales:",
-      JSON.stringify(conditions, null, 2)
-    );
-
     const updatedConditions = [...conditions, newCondition];
-    console.log(
-      "  - conditions actualizadas:",
-      JSON.stringify(updatedConditions, null, 2)
-    );
-
     setConditions(updatedConditions);
-
-    console.log("✅ Condición agregada al estado local");
   };
 
   const handleDeleteCondition = (conditionId: number) => {
