@@ -25,9 +25,9 @@ interface TableProviderProps {
 }
 
 export const TableProvider: React.FC<TableProviderProps> = ({ children }) => {
-  const [refreshTables, setRefreshTables] = useState<() => void>(() => () => {
-    console.log("refreshTables not initialized yet");
-  });
+  const [refreshTables, setRefreshTables] = useState<() => void>(
+    () => () => {}
+  );
 
   return (
     <TableContext.Provider value={{ refreshTables, setRefreshTables }}>

@@ -36,8 +36,6 @@ const envPath = __dirname + "/.env";
 const envProductionPath = __dirname + "/env.production";
 const envDevelopmentPath = __dirname + "/env.development";
 
-console.log("🔍 DEBUG - Ruta del archivo .env:", envPath);
-
 const fs = require("fs");
 if (fs.existsSync(envPath)) {
   console.log("✅ Archivo .env encontrado");
@@ -52,9 +50,6 @@ if (fs.existsSync(envPath)) {
   console.log("❌ Ningún archivo de configuración encontrado en:", __dirname);
 }
 
-// Debug temporal - verificar variables de entorno
-console.log("🔍 DEBUG - Variables de entorno:");
-console.log("DB_SERVER:", process.env.DB_SERVER);
 console.log("DB_DATABASE:", process.env.DB_DATABASE);
 console.log("DB_USER:", process.env.DB_USER);
 console.log("PORT:", process.env.PORT);
@@ -536,7 +531,13 @@ app.post(
         .map((col) => `[${col.COLUMN_NAME}]`)
         .join(", ");
       const valuePlaceholders = columnsWithValues
-        .map((col) => `@${col.COLUMN_NAME}`)
+        .map((col) => {
+          const safeParamName = `param_${col.COLUMN_NAME.replace(
+            /[^a-zA-Z0-9_]/g,
+            "_"
+          )}`;
+          return `@${safeParamName}`;
+        })
         .join(", ");
 
       const query = `INSERT INTO [${tableName}] (${columnNames}) VALUES (${valuePlaceholders})`;
@@ -590,7 +591,12 @@ app.post(
           }
         }
 
-        request.input(col.COLUMN_NAME, value);
+        // Crear un nombre de parámetro seguro (sin espacios ni caracteres especiales)
+        const safeParamName = `param_${col.COLUMN_NAME.replace(
+          /[^a-zA-Z0-9_]/g,
+          "_"
+        )}`;
+        request.input(safeParamName, value);
       });
 
       const result = await request.query(query);
@@ -766,18 +772,22 @@ app.put(
       const setFields = Object.keys(record).filter(
         (key) => !primaryKeys.includes(key)
       );
-      const setClause = setFields.map((key) => `[${key}] = @${key}`).join(", ");
+      const setClause = setFields
+        .map((key) => {
+          const safeParamName = `param_${key.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+          return `[${key}] = @${safeParamName}`;
+        })
+        .join(", ");
 
       // Build WHERE clause using primary keys
       const whereClause = primaryKeys
-        .map((key) => `[${key}] = @where_${key}`)
+        .map((key) => {
+          const safeParamName = `where_${key.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+          return `[${key}] = @${safeParamName}`;
+        })
         .join(" AND ");
 
       const query = `UPDATE [${tableName}] SET ${setClause} WHERE ${whereClause}`;
-
-      console.log(
-        `🔍 Debug update - Actualizando ${setFields.length} campos en ${tableName}`
-      );
 
       const request = pool.request();
 
@@ -819,19 +829,23 @@ app.put(
           }
         }
 
-        request.input(key, value);
+        // Crear un nombre de parámetro seguro (sin espacios ni caracteres especiales)
+        const safeParamName = `param_${key.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+        request.input(safeParamName, value);
       }
 
       // Add parameters for WHERE clause (primary keys)
       primaryKeys.forEach((key) => {
-        request.input(`where_${key}`, primaryKeyValues[key]);
+        const safeParamName = `where_${key.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+        request.input(safeParamName, primaryKeyValues[key]);
       });
 
       // Obtener datos anteriores para el log
       const oldDataQuery = `SELECT * FROM [${tableName}] WHERE ${whereClause}`;
       const oldDataRequest = pool.request();
       primaryKeys.forEach((key) => {
-        oldDataRequest.input(`where_${key}`, primaryKeyValues[key]);
+        const safeParamName = `where_${key.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+        oldDataRequest.input(safeParamName, primaryKeyValues[key]);
       });
       const oldDataResult = await oldDataRequest.query(oldDataQuery);
       const oldData = oldDataResult.recordset[0];
@@ -968,7 +982,10 @@ app.delete(
 
       // Build WHERE clause using primary keys
       const whereClause = primaryKeys
-        .map((key) => `[${key}] = @${key}`)
+        .map((key) => {
+          const safeParamName = `where_${key.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+          return `[${key}] = @${safeParamName}`;
+        })
         .join(" AND ");
 
       const query = `DELETE FROM [${tableName}] WHERE ${whereClause}`;
@@ -977,14 +994,16 @@ app.delete(
 
       // Add parameters for WHERE clause (primary keys)
       primaryKeys.forEach((key) => {
-        request.input(key, primaryKeyValues[key]);
+        const safeParamName = `where_${key.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+        request.input(safeParamName, primaryKeyValues[key]);
       });
 
       // Obtener datos anteriores para el log
       const oldDataQuery = `SELECT * FROM [${tableName}] WHERE ${whereClause}`;
       const oldDataRequest = pool.request();
       primaryKeys.forEach((key) => {
-        oldDataRequest.input(key, primaryKeyValues[key]);
+        const safeParamName = `where_${key.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+        oldDataRequest.input(safeParamName, primaryKeyValues[key]);
       });
       const oldDataResult = await oldDataRequest.query(oldDataQuery);
       const oldData = oldDataResult.recordset[0];
@@ -1065,14 +1084,18 @@ app.delete(
       for (const record of records) {
         // Build WHERE clause using primary keys
         const whereClause = primaryKeys
-          .map((key) => `[${key}] = @${key}`)
+          .map((key) => {
+            const safeParamName = `where_${key.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+            return `[${key}] = @${safeParamName}`;
+          })
           .join(" AND ");
 
         // Obtener datos anteriores para el log
         const oldDataQuery = `SELECT * FROM [${tableName}] WHERE ${whereClause}`;
         const oldDataRequest = pool.request();
         primaryKeys.forEach((key) => {
-          oldDataRequest.input(key, record[key]);
+          const safeParamName = `where_${key.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+          oldDataRequest.input(safeParamName, record[key]);
         });
         const oldDataResult = await oldDataRequest.query(oldDataQuery);
         const oldData = oldDataResult.recordset[0];
@@ -1087,7 +1110,8 @@ app.delete(
 
         // Add parameters for WHERE clause (primary keys)
         primaryKeys.forEach((key) => {
-          request.input(key, record[key]);
+          const safeParamName = `where_${key.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+          request.input(safeParamName, record[key]);
         });
 
         const result = await request.query(query);
@@ -1294,14 +1318,6 @@ app.post(
         ignoreHeaders === "true"
       );
 
-      console.log("🔍 Debug preview - ignoreHeaders:", ignoreHeaders);
-      console.log("🔍 Debug preview - excelData.headers:", excelData.headers);
-      console.log(
-        "🔍 Debug preview - excelData.rows.length:",
-        excelData.rows.length
-      );
-      console.log("🔍 Debug preview - primera fila:", excelData.rows[0]);
-
       // Si se ignoran los headers, obtener los headers de la tabla para validación
       let headers = excelData.headers;
       let validation;
@@ -1319,11 +1335,6 @@ app.post(
           insertableColumns: tableStructure.insertableColumns,
           identityColumns: tableStructure.identityColumns,
         };
-        console.log("🔍 Debug preview - usando headers de tabla:", headers);
-        console.log(
-          "🔍 Debug preview - filas del Excel (incluyendo primera como datos):",
-          excelData.rows.length
-        );
       } else {
         // Validar columnas normalmente
         validation = await excelService.validateColumns(
@@ -1382,16 +1393,6 @@ app.get(
       const { dbName, tableName } = req.params;
       const { exportType = "all", limit, offset, filters, sort } = req.query;
 
-      console.log("🔍 DEBUG - Ruta de exportación Excel iniciada");
-      console.log("🔍 DEBUG - Parámetros:", {
-        dbName,
-        tableName,
-        exportType,
-        limit,
-        offset,
-      });
-      console.log("🔍 DEBUG - Usuario:", req.user);
-
       console.log(
         `📊 Exportando datos de ${dbName}.${tableName} - Tipo: ${exportType}`
       );
@@ -1425,15 +1426,6 @@ app.get(
       }
 
       // Procesar la exportación
-      console.log("🔍 DEBUG - Llamando a exportTableToExcel con parámetros:", {
-        dbName,
-        tableName,
-        exportType,
-        limit,
-        offset,
-        parsedFilters,
-        parsedSort,
-      });
 
       const result = await excelService.exportTableToExcel(
         dbName,
@@ -1444,8 +1436,6 @@ app.get(
         parsedFilters,
         parsedSort
       );
-
-      console.log("🔍 DEBUG - Resultado de exportTableToExcel:", result);
 
       // Verificar que el resultado sea válido
       if (!result) {
@@ -1504,23 +1494,15 @@ app.get(
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
-      console.log("🔍 DEBUG - Endpoint de prueba iniciado para:", {
-        dbName,
-        tableName,
-      });
 
       // Probar paso a paso
-      console.log("🔍 DEBUG - Paso 1: Importando excelService");
       const excelService = require("./services/excelService");
 
-      console.log("🔍 DEBUG - Paso 2: Llamando a exportTableToExcel");
       const result = await excelService.exportTableToExcel(
         dbName,
         tableName,
         "all"
       );
-
-      console.log("🔍 DEBUG - Paso 3: Resultado obtenido:", result);
 
       res.json({
         success: true,

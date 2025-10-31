@@ -297,3 +297,12 @@ Si sigues teniendo problemas, ejecuta `fix-pm2-windows.bat` como Administrador.
 
 
 
+
+
+
+
+
+
+
+
+

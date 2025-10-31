@@ -229,8 +229,29 @@ async function buildSelectQuery(
     const orderDirection = sort && sort.direction === "DESC" ? "DESC" : "ASC";
 
     // Usar ROW_NUMBER() para paginación compatible con versiones más antiguas de SQL Server
+    // Crear lista de columnas sin RowNum para la consulta externa
+    const externalColumnList = columns
+      .map((col) => {
+        const columnName = col.COLUMN_NAME;
+        const dataType = col.DATA_TYPE.toLowerCase();
+
+        if (dataType.includes("date") || dataType.includes("datetime")) {
+          if (dataType.includes("datetime") || dataType.includes("time")) {
+            // Para datetime, incluir hora
+            return `FORMAT([${columnName}], 'dd/MM/yyyy HH:mm:ss') as [${columnName}]`;
+          } else {
+            // Para date, solo fecha
+            return `FORMAT([${columnName}], 'dd/MM/yyyy') as [${columnName}]`;
+          }
+        } else {
+          // Para otros tipos, usar la columna tal como está
+          return `[${columnName}]`;
+        }
+      })
+      .join(", ");
+
     query = `
-      SELECT * FROM (
+      SELECT ${externalColumnList} FROM (
         SELECT ${columnList}, ROW_NUMBER() OVER (ORDER BY [${orderColumn}] ${orderDirection}) as RowNum
         FROM [${tableName}]
         ${whereClause}
