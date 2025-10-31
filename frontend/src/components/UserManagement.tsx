@@ -123,9 +123,7 @@ export function UserManagement({ isAdmin, api }: UserManagementProps) {
   // Cargar bases de datos
   const loadDatabases = async () => {
     try {
-      console.log("🔍 DEBUG - Cargando bases de datos...");
       const response = await api.get("/api/databases");
-      console.log("🔍 DEBUG - Respuesta de bases de datos:", response.data);
       setDatabases(response.data);
     } catch (error: any) {
       console.error("Error cargando bases de datos:", error);
@@ -154,10 +152,6 @@ export function UserManagement({ isAdmin, api }: UserManagementProps) {
 
     try {
       setCreatingUser(true);
-
-      // Debug: Verificar headers antes de la petición
-      console.log("🔍 DEBUG - API_BASE_URL:", API_BASE_URL);
-      console.log("🔍 DEBUG - URL completa:", `${API_BASE_URL}/api/auth/users`);
 
       // Usar la instancia de axios configurada que ya tiene el baseURL y el token
       const response = await api.post("/api/auth/users", newUser);
@@ -928,36 +922,30 @@ export function UserManagement({ isAdmin, api }: UserManagementProps) {
                             />
                           </SelectTrigger>
                           <SelectContent className="bg-white text-gray-900 border border-gray-200">
-                            {(() => {
-                              console.log(
-                                "🔍 DEBUG - Renderizando select de bases de datos, databases:",
-                                databases
-                              );
-                              return databases.map((db: string) => (
-                                <SelectItem
-                                  key={db}
-                                  value={db}
-                                  className="text-gray-900 hover:bg-gray-100"
-                                >
-                                  <div className="flex items-center">
-                                    <svg
-                                      className="w-4 h-4 mr-2 text-green-500"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
-                                      />
-                                    </svg>
-                                    {db}
-                                  </div>
-                                </SelectItem>
-                              ));
-                            })()}
+                            {databases.map((db: string) => (
+                              <SelectItem
+                                key={db}
+                                value={db}
+                                className="text-gray-900 hover:bg-gray-100"
+                              >
+                                <div className="flex items-center">
+                                  <svg
+                                    className="w-4 h-4 mr-2 text-green-500"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+                                    />
+                                  </svg>
+                                  {db}
+                                </div>
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>

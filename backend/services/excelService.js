@@ -303,39 +303,20 @@ class ExcelService {
     ignoreHeaders = false
   ) {
     try {
-      console.log(
-        `🔍 Debug import - Iniciando proceso para ${databaseName}.${tableName}`
-      );
-      console.log(`🔍 Debug import - Archivo: ${filePath}`);
-      console.log(`🔍 Debug import - Ignorar headers: ${ignoreHeaders}`);
-
       // Leer el archivo Excel
-      console.log(`🔍 Debug import - Leyendo archivo Excel...`);
       const excelData = await this.readExcelFile(filePath, ignoreHeaders);
-      console.log(
-        `🔍 Debug import - Archivo leído. Filas: ${
-          excelData.rows.length
-        }, Headers: ${excelData.headers?.length || "null"}`
-      );
 
       // Si se ignoran los headers, necesitamos obtener los headers de la tabla
       let headers = excelData.headers;
       if (ignoreHeaders) {
-        console.log(`🔍 Debug import - Obteniendo headers de la tabla...`);
         const tableStructure = await this.getTableHeaders(
           databaseName,
           tableName
         );
         headers = tableStructure.insertableColumns;
-        console.log(
-          `🔍 Debug import - Headers de tabla obtenidos: ${headers.length} columnas`
-        );
       }
 
       // Insertar los datos
-      console.log(
-        `🔍 Debug import - Iniciando inserción de ${excelData.rows.length} filas...`
-      );
       const result = await this.insertExcelData(
         databaseName,
         tableName,
@@ -363,7 +344,6 @@ class ExcelService {
       // Limpiar el archivo temporal
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
-        console.log(`🔍 Debug import - Archivo temporal eliminado`);
       }
 
       return {
@@ -606,8 +586,6 @@ class ExcelService {
       sqlType &&
       sqlType.toLowerCase().includes("date")
     ) {
-      console.log(`🔍 Debug convert - Processing string date: "${value}"`);
-
       // Verificar si es un formato de fecha común
       const datePatterns = [
         { pattern: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, format: "DD/MM/YYYY" }, // DD/MM/YYYY
@@ -745,12 +723,6 @@ class ExcelService {
     filters = [],
     sort = null
   ) {
-    console.log("🔍 DEBUG - Iniciando exportación para:", {
-      databaseName,
-      tableName,
-      exportType,
-    });
-
     try {
       // Obtener pool de conexión
       const pool = await getPool(databaseName);
@@ -758,20 +730,41 @@ class ExcelService {
         throw new Error("No se pudo obtener la conexión a la base de datos");
       }
 
-      // Crear consulta simple
-      const query = `SELECT TOP 100 * FROM [${tableName}]`;
-      console.log("🔍 DEBUG - Ejecutando consulta:", query);
+      // Importar query builder
+      const { buildSelectQuery } = require("../utils/queryBuilder");
+
+      // Determinar límites según el tipo de exportación
+      let exportLimit = limit;
+      let exportOffset = offset;
+
+      if (exportType === "all") {
+        // Para exportar todo, no usar límites
+        exportLimit = null;
+        exportOffset = null;
+      } else if (exportType === "filtered" && filters && filters.length > 0) {
+        // Para exportar filtrados, usar los límites proporcionados o sin límite
+        exportLimit = limit || null;
+        exportOffset = offset || null;
+      } else if (exportType === "page") {
+        // Para exportar página específica, usar los límites proporcionados
+        exportLimit = limit || 100;
+        exportOffset = offset || 0;
+      }
+
+      // Construir consulta con filtros y ordenamiento
+      const request = pool.request();
+      const query = await buildSelectQuery(
+        tableName,
+        filters,
+        sort,
+        exportLimit,
+        exportOffset,
+        request,
+        databaseName
+      );
 
       // Ejecutar consulta
-      const request = pool.request();
       const result = await request.query(query);
-
-      console.log("🔍 DEBUG - Resultado obtenido:", {
-        hasResult: !!result,
-        hasRecordset: !!result?.recordset,
-        isArray: Array.isArray(result?.recordset),
-        length: result?.recordset?.length,
-      });
 
       // Validar resultado
       if (!result || !result.recordset) {
@@ -807,8 +800,6 @@ class ExcelService {
 
       // Escribir archivo
       XLSX.writeFile(workbook, filePath);
-
-      console.log("🔍 DEBUG - Archivo creado exitosamente:", filePath);
 
       return {
         filePath,
