@@ -10,6 +10,8 @@ interface ExcelExportModalProps {
   recordsPerPage: number;
   totalRecords: number;
   token: string;
+  activeFilters?: any[];
+  activeSort?: any | null;
 }
 
 export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
@@ -21,6 +23,8 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
   recordsPerPage,
   totalRecords,
   token,
+  activeFilters = [],
+  activeSort = null,
 }) => {
   const [exportType, setExportType] = useState<"all" | "current_page">("all");
   const [isExporting, setIsExporting] = useState(false);
@@ -48,6 +52,16 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
           "offset",
           ((currentPage - 1) * recordsPerPage).toString()
         );
+      }
+
+      // Agregar filtros si existen
+      if (activeFilters && activeFilters.length > 0) {
+        params.append("filters", JSON.stringify(activeFilters));
+      }
+
+      // Agregar ordenamiento si existe
+      if (activeSort) {
+        params.append("sort", JSON.stringify(activeSort));
       }
 
       const url = `/api/databases/${databaseName}/tables/${tableName}/export-excel?${params.toString()}`;
@@ -115,12 +129,19 @@ export const ExcelExportModal: React.FC<ExcelExportModalProps> = ({
   if (!isOpen) return null;
 
   const getExportDescription = () => {
+    const hasFilters = activeFilters && activeFilters.length > 0;
+    const filterText = hasFilters
+      ? ` (con ${activeFilters.length} filtro${
+          activeFilters.length > 1 ? "s" : ""
+        } aplicado${activeFilters.length > 1 ? "s" : ""})`
+      : "";
+
     if (exportType === "all") {
-      return `Exportar todos los ${totalRecords} registros de la tabla`;
+      return `Exportar todos los ${totalRecords} registros de la tabla${filterText}`;
     } else {
       const startRecord = (currentPage - 1) * recordsPerPage + 1;
       const endRecord = Math.min(currentPage * recordsPerPage, totalRecords);
-      return `Exportar registros ${startRecord} a ${endRecord} de ${totalRecords} (página actual)`;
+      return `Exportar registros ${startRecord} a ${endRecord} de ${totalRecords} (página actual)${filterText}`;
     }
   };
 

@@ -199,27 +199,14 @@ router.get(
     try {
       const { userId } = req.params;
 
-      console.log(`🔍 Debug: Endpoint llamado para usuario ${userId}`);
-      console.log(`🔍 Debug: Usuario autenticado:`, req.user);
-
       // Verificar que el usuario puede ver estos permisos
       if (!req.user.isAdmin && req.user.id !== parseInt(userId)) {
-        console.log(
-          `🔍 Debug: Acceso denegado - no es admin y no es el propio usuario`
-        );
         return res
           .status(403)
           .json({ error: "No tienes permisos para ver estos permisos" });
       }
 
-      console.log(`🔍 Debug: Llamando a getUserPermissions(${userId})...`);
       const permissions = await authService.getUserPermissions(userId);
-
-      console.log(
-        `🔍 Debug: Permisos obtenidos para usuario ${userId}:`,
-        JSON.stringify(permissions, null, 2)
-      );
-      console.log(`🔍 Debug: Enviando respuesta...`);
 
       res.json(permissions);
     } catch (error) {

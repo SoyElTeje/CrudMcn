@@ -359,7 +359,6 @@ const AddConditionModal: React.FC<AddConditionModalProps> = ({
       isRequired: conditionType === "required",
     };
 
-    console.log("Guardando nueva condición:", newCondition);
     onSave(newCondition);
     handleClose();
   };
