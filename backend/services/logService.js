@@ -32,20 +32,44 @@ class LogService {
         userAgent = null,
       } = logData;
 
+      console.log("📝 Intentando registrar log:", {
+        userId,
+        username,
+        action,
+        databaseName,
+        tableName,
+      });
+
       const pool = await getPool();
 
       // Verificar si la tabla audit_logs existe
       const tableExistsQuery = `
         SELECT COUNT(*) as count 
         FROM INFORMATION_SCHEMA.TABLES 
-        WHERE TABLE_NAME = 'audit_logs'
+        WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'audit_logs'
       `;
 
-      const tableExistsResult = await pool.request().query(tableExistsQuery);
-      const tableExists = tableExistsResult.recordset[0].count > 0;
+      let tableExistsResult;
+      try {
+        tableExistsResult = await pool.request().query(tableExistsQuery);
+        const tableExists = tableExistsResult.recordset[0].count > 0;
 
-      if (!tableExists) {
-        console.log("⚠️ Tabla audit_logs no existe, no se puede registrar log");
+        console.log("🔍 Verificación de tabla audit_logs:", {
+          exists: tableExists,
+          count: tableExistsResult.recordset[0].count,
+        });
+
+        if (!tableExists) {
+          console.warn(
+            "⚠️ Tabla audit_logs no existe en la base de datos APPDATA"
+          );
+          return;
+        }
+      } catch (checkError) {
+        console.error(
+          "❌ Error verificando existencia de tabla audit_logs:",
+          checkError
+        );
         return;
       }
 
@@ -77,25 +101,49 @@ class LogService {
         }
       }
 
-      await pool
-        .request()
-        .input("userId", userId)
-        .input("action", action)
-        .input("databaseName", databaseName)
-        .input("tableName", tableName)
-        .input("recordId", recordIdInt)
-        .input("oldValues", oldValues)
-        .input("newValues", newValues)
-        .input("affectedRows", affectedRows)
-        .input("ipAddress", ipAddress)
-        .input("userAgent", userAgent)
-        .query(query);
+      console.log("💾 Ejecutando INSERT en audit_logs con datos:", {
+        userId,
+        action,
+        databaseName,
+        tableName,
+        recordId: recordIdInt,
+        affectedRows,
+      });
+
+      const request = pool.request();
+      request.input("userId", userId);
+      request.input("action", action);
+      request.input("databaseName", databaseName);
+      request.input("tableName", tableName);
+      request.input("recordId", recordIdInt);
+      request.input("oldValues", oldValues);
+      request.input("newValues", newValues);
+      request.input("affectedRows", affectedRows);
+      request.input("ipAddress", ipAddress);
+      request.input("userAgent", userAgent);
+
+      const result = await request.query(query);
 
       console.log(
-        `✅ Log registrado: ${action} en ${databaseName}.${tableName} por usuario ${userId}`
+        `✅ Log registrado exitosamente: ${action} en ${databaseName}.${tableName} por usuario ${username} (ID: ${userId})`
       );
+      console.log("📊 Resultado del INSERT:", {
+        rowsAffected: result.rowsAffected,
+        recordset: result.recordset,
+      });
     } catch (error) {
       console.error("❌ Error registrando log:", error);
+      console.error("❌ Detalles del error:", {
+        message: error.message,
+        code: error.code,
+        number: error.number,
+        state: error.state,
+        class: error.class,
+        serverName: error.serverName,
+        procName: error.procName,
+        lineNumber: error.lineNumber,
+        stack: error.stack,
+      });
       // No lanzamos el error para no interrumpir la operación principal
     }
   }

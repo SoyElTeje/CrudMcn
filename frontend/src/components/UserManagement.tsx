@@ -50,6 +50,21 @@ interface UserManagementProps {
   api: any; // Agregar la instancia de axios del App.tsx
 }
 
+/**
+ * Helper para extraer mensaje de error de forma segura
+ * Maneja diferentes formatos de respuesta de error del backend
+ */
+function extractErrorMessage(error: any, defaultMessage: string): string {
+  return (
+    error.response?.data?.message ||
+    (typeof error.response?.data?.error === "string"
+      ? error.response.data.error
+      : error.response?.data?.error?.message) ||
+    error.message ||
+    defaultMessage
+  );
+}
+
 export function UserManagement({ isAdmin, api }: UserManagementProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,7 +129,7 @@ export function UserManagement({ isAdmin, api }: UserManagementProps) {
       const response = await api.get("/api/auth/users");
       setUsers(response.data);
     } catch (error: any) {
-      setError(error.response?.data?.error || "Error cargando usuarios");
+      setError(extractErrorMessage(error, "Error cargando usuarios"));
     } finally {
       setLoading(false);
     }
@@ -164,7 +179,7 @@ export function UserManagement({ isAdmin, api }: UserManagementProps) {
         setError("Error creando usuario");
       }
     } catch (error: any) {
-      setError(error.response?.data?.error || "Error creando usuario");
+      setError(extractErrorMessage(error, "Error creando usuario"));
     } finally {
       setCreatingUser(false);
     }
@@ -186,7 +201,7 @@ export function UserManagement({ isAdmin, api }: UserManagementProps) {
       setEditingUser(null);
       setShowEditForm(false);
     } catch (error: any) {
-      setError(error.response?.data?.error || "Error actualizando contraseña");
+      setError(extractErrorMessage(error, "Error actualizando contraseña"));
     } finally {
       setUpdatingUser(false);
     }
@@ -201,8 +216,10 @@ export function UserManagement({ isAdmin, api }: UserManagementProps) {
       loadUsers();
     } catch (error: any) {
       setError(
-        error.response?.data?.error ||
+        extractErrorMessage(
+          error,
           "Error actualizando permisos de administrador"
+        )
       );
     }
   };
@@ -220,7 +237,7 @@ export function UserManagement({ isAdmin, api }: UserManagementProps) {
       await api.delete(`/api/auth/users/${userToDelete.id}`);
       loadUsers();
     } catch (error: any) {
-      setError(error.response?.data?.error || "Error eliminando usuario");
+      setError(extractErrorMessage(error, "Error eliminando usuario"));
     }
   };
 
@@ -231,7 +248,7 @@ export function UserManagement({ isAdmin, api }: UserManagementProps) {
       const response = await api.get(`/api/auth/users/${user.id}/permissions`);
       setUserPermissions(response.data);
     } catch (error: any) {
-      setError(error.response?.data?.error || "Error cargando permisos");
+      setError(extractErrorMessage(error, "Error cargando permisos"));
     } finally {
       setLoadingPermissions(false);
     }
@@ -275,8 +292,7 @@ export function UserManagement({ isAdmin, api }: UserManagementProps) {
       });
     } catch (error: any) {
       setError(
-        error.response?.data?.error ||
-          "Error asignando permisos de base de datos"
+        extractErrorMessage(error, "Error asignando permisos de base de datos")
       );
     } finally {
       setSavingPermissions(false);
@@ -311,9 +327,7 @@ export function UserManagement({ isAdmin, api }: UserManagementProps) {
       setSelectedTable("");
       setTablePermissions({ hasAccess: true });
     } catch (error: any) {
-      setError(
-        error.response?.data?.error || "Error asignando permisos de tabla"
-      );
+      setError(extractErrorMessage(error, "Error asignando permisos de tabla"));
     } finally {
       setSavingPermissions(false);
     }
@@ -344,8 +358,7 @@ export function UserManagement({ isAdmin, api }: UserManagementProps) {
       await loadUserPermissions(selectedUserForPermissions);
     } catch (error: any) {
       setError(
-        error.response?.data?.error ||
-          "Error eliminando permisos de base de datos"
+        extractErrorMessage(error, "Error eliminando permisos de base de datos")
       );
     } finally {
       setSavingPermissions(false);
@@ -383,7 +396,7 @@ export function UserManagement({ isAdmin, api }: UserManagementProps) {
       await loadUserPermissions(selectedUserForPermissions);
     } catch (error: any) {
       setError(
-        error.response?.data?.error || "Error eliminando permisos de tabla"
+        extractErrorMessage(error, "Error eliminando permisos de tabla")
       );
     } finally {
       setSavingPermissions(false);
