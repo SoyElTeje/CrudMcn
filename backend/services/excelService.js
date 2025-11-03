@@ -353,13 +353,10 @@ class ExcelService {
         errorReport,
       };
     } catch (error) {
-      console.error(`🔍 Debug import - Error en processExcelImport:`, error);
+      console.error("Error en processExcelImport:", error.message);
       // Limpiar el archivo temporal en caso de error
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
-        console.log(
-          `🔍 Debug import - Archivo temporal eliminado después de error`
-        );
       }
       throw error;
     }
@@ -809,8 +806,7 @@ class ExcelService {
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
-      console.error("🔍 DEBUG - Error en exportación:", error.message);
-      console.error("🔍 DEBUG - Stack trace:", error.stack);
+      console.error("Error en exportación:", error.message);
       throw new Error(`Error al exportar tabla: ${error.message}`);
     }
   }
