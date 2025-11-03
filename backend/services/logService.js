@@ -32,14 +32,6 @@ class LogService {
         userAgent = null,
       } = logData;
 
-      console.log("📝 Intentando registrar log:", {
-        userId,
-        username,
-        action,
-        databaseName,
-        tableName,
-      });
-
       const pool = await getPool();
 
       // Verificar si la tabla audit_logs existe
@@ -54,21 +46,16 @@ class LogService {
         tableExistsResult = await pool.request().query(tableExistsQuery);
         const tableExists = tableExistsResult.recordset[0].count > 0;
 
-        console.log("🔍 Verificación de tabla audit_logs:", {
-          exists: tableExists,
-          count: tableExistsResult.recordset[0].count,
-        });
-
         if (!tableExists) {
           console.warn(
-            "⚠️ Tabla audit_logs no existe en la base de datos APPDATA"
+            "Tabla audit_logs no existe en la base de datos APPDATA"
           );
           return;
         }
       } catch (checkError) {
         console.error(
-          "❌ Error verificando existencia de tabla audit_logs:",
-          checkError
+          "Error verificando existencia de tabla audit_logs:",
+          checkError.message
         );
         return;
       }
@@ -101,15 +88,6 @@ class LogService {
         }
       }
 
-      console.log("💾 Ejecutando INSERT en audit_logs con datos:", {
-        userId,
-        action,
-        databaseName,
-        tableName,
-        recordId: recordIdInt,
-        affectedRows,
-      });
-
       const request = pool.request();
       request.input("userId", userId);
       request.input("action", action);
@@ -122,28 +100,9 @@ class LogService {
       request.input("ipAddress", ipAddress);
       request.input("userAgent", userAgent);
 
-      const result = await request.query(query);
-
-      console.log(
-        `✅ Log registrado exitosamente: ${action} en ${databaseName}.${tableName} por usuario ${username} (ID: ${userId})`
-      );
-      console.log("📊 Resultado del INSERT:", {
-        rowsAffected: result.rowsAffected,
-        recordset: result.recordset,
-      });
+      await request.query(query);
     } catch (error) {
-      console.error("❌ Error registrando log:", error);
-      console.error("❌ Detalles del error:", {
-        message: error.message,
-        code: error.code,
-        number: error.number,
-        state: error.state,
-        class: error.class,
-        serverName: error.serverName,
-        procName: error.procName,
-        lineNumber: error.lineNumber,
-        stack: error.stack,
-      });
+      console.error("Error registrando log:", error.message);
       // No lanzamos el error para no interrumpir la operación principal
     }
   }
@@ -276,7 +235,7 @@ class LogService {
       const tableExists = tableExistsResult.recordset[0].count > 0;
 
       if (!tableExists) {
-        console.log("⚠️ Tabla LOGS no existe, retornando logs vacíos");
+        console.warn("Tabla LOGS no existe, retornando logs vacíos");
         return [];
       }
 
@@ -333,7 +292,7 @@ class LogService {
       const tableExists = tableExistsResult.recordset[0].count > 0;
 
       if (!tableExists) {
-        console.log("⚠️ Tabla audit_logs no existe, retornando logs vacíos");
+        console.warn("Tabla audit_logs no existe, retornando logs vacíos");
         return {
           data: [],
           totalRecords: 0,
@@ -501,7 +460,7 @@ class LogService {
       const tableExists = tableExistsResult.recordset[0].count > 0;
 
       if (!tableExists) {
-        console.log("⚠️ Tabla LOGS no existe, retornando estadísticas vacías");
+        console.warn("Tabla LOGS no existe, retornando estadísticas vacías");
         return [];
       }
 

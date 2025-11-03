@@ -153,6 +153,7 @@ config.local.json
 test-results/
 coverage/
 .nyc_output/
+__tests__/
 
 # Package manager files
 package-lock.json
@@ -161,3 +162,17 @@ pnpm-lock.yaml
 
 # Local development files
 *.local
+
+# Development scripts (legacy)
+backend/scripts-legacy/
+
+# Test/development Excel files
+backend/uploads/*.xlsx
+
+# Development environment files (keep only production templates)
+backend/env.development
+backend/env.local
+backend/env.staging
+frontend/env.development
+frontend/env.local
+frontend/env.staging

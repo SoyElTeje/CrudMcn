@@ -17,15 +17,6 @@ const authenticateToken = (req, res, next) => {
       process.env.JWT_SECRET || "your-secret-key"
     );
 
-    // Debug: Verificar información del token decodificado
-    console.log("🔍 Token decodificado:", {
-      userId: decoded.id,
-      username: decoded.username,
-      isAdmin: decoded.isAdmin,
-      url: req.url,
-      method: req.method,
-    });
-
     req.user = decoded;
     next();
   } catch (error) {

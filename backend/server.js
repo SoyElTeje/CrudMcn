@@ -40,34 +40,19 @@ const fs = require("fs");
 const nodeEnv = process.env.NODE_ENV || "development";
 
 if (fs.existsSync(envPath)) {
-  console.log("✅ Archivo .env encontrado");
   require("dotenv").config({ path: envPath });
 } else if (nodeEnv === "production" && fs.existsSync(envProductionPath)) {
-  console.log("✅ Archivo env.production encontrado");
   require("dotenv").config({ path: envProductionPath });
 } else if (
   (nodeEnv === "development" || !nodeEnv) &&
   fs.existsSync(envDevelopmentPath)
 ) {
-  console.log("✅ Archivo env.development encontrado");
   require("dotenv").config({ path: envDevelopmentPath });
 } else if (fs.existsSync(envProductionPath)) {
-  console.log("⚠️ Usando env.production como fallback");
   require("dotenv").config({ path: envProductionPath });
 } else if (fs.existsSync(envDevelopmentPath)) {
-  console.log("⚠️ Usando env.development como fallback");
   require("dotenv").config({ path: envDevelopmentPath });
-} else {
-  console.log("❌ Ningún archivo de configuración encontrado en:", __dirname);
 }
-
-console.log("📊 Variables de entorno cargadas:");
-console.log("  NODE_ENV:", process.env.NODE_ENV || "development");
-console.log("  DB_SERVER:", process.env.DB_SERVER);
-console.log("  DB_PORT:", process.env.DB_PORT || "1433");
-console.log("  DB_DATABASE:", process.env.DB_DATABASE);
-console.log("  DB_USER:", process.env.DB_USER);
-console.log("  PORT:", process.env.PORT || "3001");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -103,7 +88,6 @@ app.use(
 app.use(express.json());
 // Servir archivos estáticos del frontend construido
 const frontendPath = path.resolve(__dirname, "..", "frontend", "dist");
-console.log("📁 Frontend path:", frontendPath);
 app.use(express.static(frontendPath));
 
 // Middleware para manejar rutas de la API
@@ -394,12 +378,8 @@ app.get(
           request,
           dbName
         );
-        console.log(
-          `🔍 Query generado para ${dbName}.${tableName}:`,
-          query.substring(0, 200) + "..."
-        );
       } catch (buildError) {
-        console.error("❌ Error construyendo query:", buildError);
+        console.error("Error construyendo query:", buildError.message);
         throw buildError;
       }
 
@@ -407,11 +387,7 @@ app.get(
       try {
         result = await request.query(query);
       } catch (queryError) {
-        console.error("❌ Error ejecutando query SQL:", queryError);
-        console.error("  Query completo:", query);
-        console.error("  SQL Error Code:", queryError.code);
-        console.error("  SQL Error Number:", queryError.number);
-        console.error("  SQL Error Message:", queryError.message);
+        console.error("Error ejecutando query SQL:", queryError.message);
 
         // Verificar si es un error de función FORMAT no disponible (SQL Server < 2012)
         if (
@@ -439,11 +415,7 @@ app.get(
         data: recordsWithFormattedDates,
       });
     } catch (error) {
-      console.error("❌ Error fetching table data:", error);
-      console.error("  Database:", req.params.dbName);
-      console.error("  Table:", req.params.tableName);
-      console.error("  Error message:", error.message);
-      console.error("  Error stack:", error.stack);
+      console.error("Error fetching table data:", error.message);
 
       res.status(500).json({
         error: "Failed to fetch table data",
@@ -654,15 +626,6 @@ app.post(
       });
 
       const result = await request.query(query);
-
-      // Debug: Verificar información del usuario
-      console.log("🔍 Usuario que realiza la inserción:", {
-        userId: req.user.id,
-        username: req.user.username,
-        isAdmin: req.user.isAdmin,
-        dbName,
-        tableName,
-      });
 
       // Registrar log de inserción
       await logService.logInsert(
@@ -1231,12 +1194,6 @@ app.post(
         });
       }
 
-      console.log(
-        `📊 Procesando importación de Excel para ${dbName}.${tableName}`
-      );
-      console.log(`📁 Archivo: ${req.file.originalname}`);
-      console.log(`🔧 Ignorar headers: ${ignoreHeaders === "true"}`);
-
       // Procesar la importación
       const result = await excelService.processExcelImport(
         req.file.path,
@@ -1330,8 +1287,6 @@ app.get(
   async (req, res) => {
     try {
       const { dbName, tableName } = req.params;
-
-      console.log(`📋 Generando template de Excel para ${dbName}.${tableName}`);
 
       // Generar el template
       const template = await excelService.generateExcelTemplate(
@@ -1530,7 +1485,6 @@ app.get(
         if (err) {
           console.error("Error sending file:", err);
         } else {
-          console.log(`✅ Archivo exportado exitosamente: ${result.fileName}`);
         }
       });
     } catch (error) {
@@ -1575,7 +1529,7 @@ app.get(
         message: "Exportación exitosa",
       });
     } catch (error) {
-      console.error("🔍 DEBUG - Error en endpoint de prueba:", error);
+      console.error("Error en exportación:", error.message);
       res.status(500).json({
         success: false,
         error: error.message,

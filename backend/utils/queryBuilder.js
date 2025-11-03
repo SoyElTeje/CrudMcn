@@ -190,7 +190,7 @@ async function buildSelectQuery(
       .input("tableName", tableName)
       .query(columnInfoQuery);
   } catch (error) {
-    console.error("❌ Error obteniendo información de columnas:", error);
+    console.error("Error obteniendo información de columnas:", error.message);
     console.error("  Database:", databaseName);
     console.error("  Table:", tableName);
     throw new Error(
@@ -207,12 +207,6 @@ async function buildSelectQuery(
       }`
     );
   }
-
-  // Debug: mostrar tipos de columnas detectados
-  console.log(
-    `🔍 Columnas detectadas para ${tableName}:`,
-    columns.map((c) => ({ name: c.COLUMN_NAME, type: c.DATA_TYPE }))
-  );
 
   // Construir la lista de columnas con formateo de fechas
   // Nota: FORMAT() solo está disponible en SQL Server 2012+ y solo funciona con tipos fecha/datetime
@@ -245,27 +239,20 @@ async function buildSelectQuery(
           baseType === "smalldatetime" ||
           baseType === "time");
 
-      console.log(
-        `  Columna ${columnName}: tipo="${dataType}" -> baseType="${baseType}", isDateType=${isDateType}, isTextType=${isTextType}`
-      );
-
       if (isDateType) {
         // Solo aplicar FORMAT() a tipos de fecha reales
-        // IMPORTANTE: Convertir explícitamente a tipo fecha para evitar errores de tipo
-        // Esto previene problemas cuando SQL Server infiere nvarchar por datos NULL u otras razones
+        // Usar TRY_CAST para manejar valores NULL o inválidos sin causar errores
+        // TRY_CAST retorna NULL si la conversión falla, lo cual es seguro para FORMAT
         if (baseType === "time") {
-          // Para time, mantener el formato original
-          return `FORMAT(CAST([${columnName}] AS time), 'HH:mm:ss') as [${columnName}]`;
+          return `CASE WHEN [${columnName}] IS NULL THEN NULL ELSE FORMAT(TRY_CAST([${columnName}] AS time), 'HH:mm:ss') END as [${columnName}]`;
         } else if (
           baseType === "datetime" ||
           baseType === "datetime2" ||
           baseType === "smalldatetime"
         ) {
-          // Para datetime, incluir hora - convertir explícitamente a datetime2
-          return `FORMAT(CAST([${columnName}] AS datetime2), 'dd/MM/yyyy HH:mm:ss') as [${columnName}]`;
+          return `CASE WHEN [${columnName}] IS NULL THEN NULL ELSE FORMAT(TRY_CAST([${columnName}] AS datetime2), 'dd/MM/yyyy HH:mm:ss') END as [${columnName}]`;
         } else {
-          // Para date, solo fecha - convertir explícitamente a date
-          return `FORMAT(CAST([${columnName}] AS date), 'dd/MM/yyyy') as [${columnName}]`;
+          return `CASE WHEN [${columnName}] IS NULL THEN NULL ELSE FORMAT(TRY_CAST([${columnName}] AS date), 'dd/MM/yyyy') END as [${columnName}]`;
         }
       } else {
         // Para otros tipos (incluyendo nvarchar, varchar, text, etc.), usar la columna tal como está
@@ -320,19 +307,18 @@ async function buildSelectQuery(
             baseType === "time");
 
         if (isDateType) {
-          // IMPORTANTE: Convertir explícitamente a tipo fecha para evitar errores de tipo
+          // Usar TRY_CAST para manejar valores NULL o inválidos sin causar errores
+          // TRY_CAST retorna NULL si la conversión falla, lo cual es seguro para FORMAT
           if (baseType === "time") {
-            return `FORMAT(CAST([${columnName}] AS time), 'HH:mm:ss') as [${columnName}]`;
+            return `CASE WHEN [${columnName}] IS NULL THEN NULL ELSE FORMAT(TRY_CAST([${columnName}] AS time), 'HH:mm:ss') END as [${columnName}]`;
           } else if (
             baseType === "datetime" ||
             baseType === "datetime2" ||
             baseType === "smalldatetime"
           ) {
-            // Para datetime, incluir hora - convertir explícitamente a datetime2
-            return `FORMAT(CAST([${columnName}] AS datetime2), 'dd/MM/yyyy HH:mm:ss') as [${columnName}]`;
+            return `CASE WHEN [${columnName}] IS NULL THEN NULL ELSE FORMAT(TRY_CAST([${columnName}] AS datetime2), 'dd/MM/yyyy HH:mm:ss') END as [${columnName}]`;
           } else {
-            // Para date, solo fecha - convertir explícitamente a date
-            return `FORMAT(CAST([${columnName}] AS date), 'dd/MM/yyyy') as [${columnName}]`;
+            return `CASE WHEN [${columnName}] IS NULL THEN NULL ELSE FORMAT(TRY_CAST([${columnName}] AS date), 'dd/MM/yyyy') END as [${columnName}]`;
           }
         } else {
           // Para otros tipos, usar la columna tal como está
