@@ -37,23 +37,37 @@ const envProductionPath = __dirname + "/env.production";
 const envDevelopmentPath = __dirname + "/env.development";
 
 const fs = require("fs");
+const nodeEnv = process.env.NODE_ENV || "development";
+
 if (fs.existsSync(envPath)) {
   console.log("✅ Archivo .env encontrado");
   require("dotenv").config({ path: envPath });
-} else if (fs.existsSync(envProductionPath)) {
+} else if (nodeEnv === "production" && fs.existsSync(envProductionPath)) {
   console.log("✅ Archivo env.production encontrado");
   require("dotenv").config({ path: envProductionPath });
-} else if (fs.existsSync(envDevelopmentPath)) {
+} else if (
+  (nodeEnv === "development" || !nodeEnv) &&
+  fs.existsSync(envDevelopmentPath)
+) {
   console.log("✅ Archivo env.development encontrado");
+  require("dotenv").config({ path: envDevelopmentPath });
+} else if (fs.existsSync(envProductionPath)) {
+  console.log("⚠️ Usando env.production como fallback");
+  require("dotenv").config({ path: envProductionPath });
+} else if (fs.existsSync(envDevelopmentPath)) {
+  console.log("⚠️ Usando env.development como fallback");
   require("dotenv").config({ path: envDevelopmentPath });
 } else {
   console.log("❌ Ningún archivo de configuración encontrado en:", __dirname);
 }
 
-console.log("DB_DATABASE:", process.env.DB_DATABASE);
-console.log("DB_USER:", process.env.DB_USER);
-console.log("PORT:", process.env.PORT);
-console.log("NODE_ENV:", process.env.NODE_ENV);
+console.log("📊 Variables de entorno cargadas:");
+console.log("  NODE_ENV:", process.env.NODE_ENV || "development");
+console.log("  DB_SERVER:", process.env.DB_SERVER);
+console.log("  DB_PORT:", process.env.DB_PORT || "1433");
+console.log("  DB_DATABASE:", process.env.DB_DATABASE);
+console.log("  DB_USER:", process.env.DB_USER);
+console.log("  PORT:", process.env.PORT || "3001");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -369,17 +383,50 @@ app.get(
       const { buildSelectQuery } = require("./utils/queryBuilder");
 
       // Build the query with filters and sorting
-      const query = await buildSelectQuery(
-        tableName,
-        parsedFilters,
-        parsedSort,
-        limit,
-        offset,
-        request,
-        dbName
-      );
+      let query;
+      try {
+        query = await buildSelectQuery(
+          tableName,
+          parsedFilters,
+          parsedSort,
+          limit,
+          offset,
+          request,
+          dbName
+        );
+        console.log(
+          `🔍 Query generado para ${dbName}.${tableName}:`,
+          query.substring(0, 200) + "..."
+        );
+      } catch (buildError) {
+        console.error("❌ Error construyendo query:", buildError);
+        throw buildError;
+      }
 
-      const result = await request.query(query);
+      let result;
+      try {
+        result = await request.query(query);
+      } catch (queryError) {
+        console.error("❌ Error ejecutando query SQL:", queryError);
+        console.error("  Query completo:", query);
+        console.error("  SQL Error Code:", queryError.code);
+        console.error("  SQL Error Number:", queryError.number);
+        console.error("  SQL Error Message:", queryError.message);
+
+        // Verificar si es un error de función FORMAT no disponible (SQL Server < 2012)
+        if (
+          queryError.number === 195 ||
+          queryError.message?.includes("FORMAT") ||
+          queryError.message?.includes("Invalid function name")
+        ) {
+          throw new Error(
+            `La función FORMAT() no está disponible en esta versión de SQL Server. ` +
+              `Se requiere SQL Server 2012 o superior. Error original: ${queryError.message}`
+          );
+        }
+
+        throw queryError;
+      }
 
       // Las fechas ya vienen formateadas desde SQL Server usando FORMAT()
       // No necesitamos procesamiento adicional
@@ -392,10 +439,17 @@ app.get(
         data: recordsWithFormattedDates,
       });
     } catch (error) {
-      console.error("Error fetching table data:", error);
+      console.error("❌ Error fetching table data:", error);
+      console.error("  Database:", req.params.dbName);
+      console.error("  Table:", req.params.tableName);
+      console.error("  Error message:", error.message);
+      console.error("  Error stack:", error.stack);
+
       res.status(500).json({
         error: "Failed to fetch table data",
         details: error.message,
+        database: req.params.dbName,
+        table: req.params.tableName,
       });
     }
   }
@@ -601,6 +655,15 @@ app.post(
 
       const result = await request.query(query);
 
+      // Debug: Verificar información del usuario
+      console.log("🔍 Usuario que realiza la inserción:", {
+        userId: req.user.id,
+        username: req.user.username,
+        isAdmin: req.user.isAdmin,
+        dbName,
+        tableName,
+      });
+
       // Registrar log de inserción
       await logService.logInsert(
         req.user.id,
@@ -609,6 +672,7 @@ app.post(
         tableName,
         record,
         null, // recordId (se puede obtener después si es necesario)
+        result.rowsAffected[0] || 1, // affectedRows
         req.ip,
         req.get("User-Agent")
       );
@@ -861,6 +925,7 @@ app.put(
         oldData,
         record,
         JSON.stringify(primaryKeyValues), // recordId como string de los valores de PK
+        result.rowsAffected[0] || 1, // affectedRows
         req.ip,
         req.get("User-Agent")
       );

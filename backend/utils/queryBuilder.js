@@ -183,30 +183,92 @@ async function buildSelectQuery(
     ORDER BY ORDINAL_POSITION
   `;
 
-  const columnResult = await pool
-    .request()
-    .input("tableName", tableName)
-    .query(columnInfoQuery);
+  let columnResult;
+  try {
+    columnResult = await pool
+      .request()
+      .input("tableName", tableName)
+      .query(columnInfoQuery);
+  } catch (error) {
+    console.error("❌ Error obteniendo información de columnas:", error);
+    console.error("  Database:", databaseName);
+    console.error("  Table:", tableName);
+    throw new Error(
+      `Error obteniendo estructura de la tabla ${tableName}: ${error.message}`
+    );
+  }
 
   const columns = columnResult.recordset;
 
+  if (!columns || columns.length === 0) {
+    throw new Error(
+      `No se encontraron columnas para la tabla ${tableName} en la base de datos ${
+        databaseName || "default"
+      }`
+    );
+  }
+
+  // Debug: mostrar tipos de columnas detectados
+  console.log(
+    `🔍 Columnas detectadas para ${tableName}:`,
+    columns.map((c) => ({ name: c.COLUMN_NAME, type: c.DATA_TYPE }))
+  );
+
   // Construir la lista de columnas con formateo de fechas
+  // Nota: FORMAT() solo está disponible en SQL Server 2012+ y solo funciona con tipos fecha/datetime
+  // IMPORTANTE: No aplicar FORMAT() a tipos nvarchar/varchar/text aunque se llamen "fecha"
   const columnList = columns
     .map((col) => {
       const columnName = col.COLUMN_NAME;
-      const dataType = col.DATA_TYPE.toLowerCase();
+      const dataType = col.DATA_TYPE.toLowerCase().trim();
 
-      // Si es una columna de fecha, formatearla directamente en SQL
-      if (dataType.includes("date") || dataType.includes("datetime")) {
-        if (dataType.includes("datetime") || dataType.includes("time")) {
-          // Para datetime, incluir hora
-          return `FORMAT([${columnName}], 'dd/MM/yyyy HH:mm:ss') as [${columnName}]`;
+      // Extraer el tipo base (sin longitud, ej: "nvarchar" de "nvarchar(50)")
+      const baseType = dataType.split("(")[0].trim();
+
+      // Primero verificar si es un tipo de texto (ANTES de verificar fecha)
+      // Los tipos de texto incluyen: nvarchar, varchar, char, nchar, text, ntext
+      const isTextType =
+        baseType === "nvarchar" ||
+        baseType === "varchar" ||
+        baseType === "char" ||
+        baseType === "nchar" ||
+        baseType === "text" ||
+        baseType === "ntext";
+
+      // Solo aplicar FORMAT() si es realmente un tipo de fecha/datetime Y NO es texto
+      // Los tipos de fecha válidos son: date, datetime, datetime2, smalldatetime, time
+      const isDateType =
+        !isTextType &&
+        (baseType === "date" ||
+          baseType === "datetime" ||
+          baseType === "datetime2" ||
+          baseType === "smalldatetime" ||
+          baseType === "time");
+
+      console.log(
+        `  Columna ${columnName}: tipo="${dataType}" -> baseType="${baseType}", isDateType=${isDateType}, isTextType=${isTextType}`
+      );
+
+      if (isDateType) {
+        // Solo aplicar FORMAT() a tipos de fecha reales
+        // IMPORTANTE: Convertir explícitamente a tipo fecha para evitar errores de tipo
+        // Esto previene problemas cuando SQL Server infiere nvarchar por datos NULL u otras razones
+        if (baseType === "time") {
+          // Para time, mantener el formato original
+          return `FORMAT(CAST([${columnName}] AS time), 'HH:mm:ss') as [${columnName}]`;
+        } else if (
+          baseType === "datetime" ||
+          baseType === "datetime2" ||
+          baseType === "smalldatetime"
+        ) {
+          // Para datetime, incluir hora - convertir explícitamente a datetime2
+          return `FORMAT(CAST([${columnName}] AS datetime2), 'dd/MM/yyyy HH:mm:ss') as [${columnName}]`;
         } else {
-          // Para date, solo fecha
-          return `FORMAT([${columnName}], 'dd/MM/yyyy') as [${columnName}]`;
+          // Para date, solo fecha - convertir explícitamente a date
+          return `FORMAT(CAST([${columnName}] AS date), 'dd/MM/yyyy') as [${columnName}]`;
         }
       } else {
-        // Para otros tipos, usar la columna tal como está
+        // Para otros tipos (incluyendo nvarchar, varchar, text, etc.), usar la columna tal como está
         return `[${columnName}]`;
       }
     })
@@ -230,18 +292,47 @@ async function buildSelectQuery(
 
     // Usar ROW_NUMBER() para paginación compatible con versiones más antiguas de SQL Server
     // Crear lista de columnas sin RowNum para la consulta externa
+    // IMPORTANTE: Debe coincidir con columnList para que las columnas se alineen correctamente
     const externalColumnList = columns
       .map((col) => {
         const columnName = col.COLUMN_NAME;
-        const dataType = col.DATA_TYPE.toLowerCase();
+        const dataType = col.DATA_TYPE.toLowerCase().trim();
 
-        if (dataType.includes("date") || dataType.includes("datetime")) {
-          if (dataType.includes("datetime") || dataType.includes("time")) {
-            // Para datetime, incluir hora
-            return `FORMAT([${columnName}], 'dd/MM/yyyy HH:mm:ss') as [${columnName}]`;
+        // Extraer el tipo base (sin longitud, ej: "nvarchar" de "nvarchar(50)")
+        const baseType = dataType.split("(")[0].trim();
+
+        // Primero verificar si es un tipo de texto (ANTES de verificar fecha)
+        const isTextType =
+          baseType === "nvarchar" ||
+          baseType === "varchar" ||
+          baseType === "char" ||
+          baseType === "nchar" ||
+          baseType === "text" ||
+          baseType === "ntext";
+
+        // Solo aplicar FORMAT() si es realmente un tipo de fecha/datetime Y NO es texto
+        const isDateType =
+          !isTextType &&
+          (baseType === "date" ||
+            baseType === "datetime" ||
+            baseType === "datetime2" ||
+            baseType === "smalldatetime" ||
+            baseType === "time");
+
+        if (isDateType) {
+          // IMPORTANTE: Convertir explícitamente a tipo fecha para evitar errores de tipo
+          if (baseType === "time") {
+            return `FORMAT(CAST([${columnName}] AS time), 'HH:mm:ss') as [${columnName}]`;
+          } else if (
+            baseType === "datetime" ||
+            baseType === "datetime2" ||
+            baseType === "smalldatetime"
+          ) {
+            // Para datetime, incluir hora - convertir explícitamente a datetime2
+            return `FORMAT(CAST([${columnName}] AS datetime2), 'dd/MM/yyyy HH:mm:ss') as [${columnName}]`;
           } else {
-            // Para date, solo fecha
-            return `FORMAT([${columnName}], 'dd/MM/yyyy') as [${columnName}]`;
+            // Para date, solo fecha - convertir explícitamente a date
+            return `FORMAT(CAST([${columnName}] AS date), 'dd/MM/yyyy') as [${columnName}]`;
           }
         } else {
           // Para otros tipos, usar la columna tal como está
