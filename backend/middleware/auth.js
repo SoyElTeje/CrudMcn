@@ -1,6 +1,23 @@
 const jwt = require("jsonwebtoken");
 
 /**
+ * Obtiene el JWT_SECRET de las variables de entorno
+ * Lanza un error si no está configurado
+ */
+function getJWTSecret() {
+  const jwtSecret = process.env.JWT_SECRET;
+  
+  if (!jwtSecret || jwtSecret.trim() === "" || jwtSecret === "your-secret-key") {
+    throw new Error(
+      "JWT_SECRET debe estar configurado en las variables de entorno (.env). " +
+      "No se puede usar un valor por defecto por razones de seguridad."
+    );
+  }
+  
+  return jwtSecret;
+}
+
+/**
  * Middleware para verificar el token JWT
  */
 const authenticateToken = (req, res, next) => {
@@ -12,14 +29,20 @@ const authenticateToken = (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || "your-secret-key"
-    );
+    const jwtSecret = getJWTSecret();
+    const decoded = jwt.verify(token, jwtSecret);
 
     req.user = decoded;
     next();
   } catch (error) {
+    // Si el error es por JWT_SECRET no configurado, devolver error 500
+    if (error.message.includes("JWT_SECRET")) {
+      console.error("Error de configuración:", error.message);
+      return res.status(500).json({ 
+        error: "Error de configuración del servidor. Contacte al administrador." 
+      });
+    }
+    
     console.error("Error verificando token:", error);
     return res.status(403).json({ error: "Token inválido o expirado" });
   }

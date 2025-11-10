@@ -1,6 +1,8 @@
+import { API_BASE_URL } from "./api";
+
 export const productionConfig = {
-  // URL del backend en producción
-  API_BASE_URL: process.env.VITE_API_BASE_URL || "http://192.168.168.209:3001",
+  // URL del backend en producción (usando configuración centralizada)
+  API_BASE_URL: API_BASE_URL,
 
   // Configuración de timeout para requests
   REQUEST_TIMEOUT: 30000,

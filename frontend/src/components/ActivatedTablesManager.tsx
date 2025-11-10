@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { formatDate } from "../lib/dateUtils";
-// API configuration
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+import { API_BASE_URL } from "../config/api";
 import {
   Select,
   SelectTrigger,

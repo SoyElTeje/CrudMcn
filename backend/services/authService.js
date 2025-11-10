@@ -58,15 +58,33 @@ class AuthService {
     }
   }
 
+  /**
+   * Obtiene el JWT_SECRET de las variables de entorno
+   * Lanza un error si no está configurado
+   */
+  getJWTSecret() {
+    const jwtSecret = process.env.JWT_SECRET;
+    
+    if (!jwtSecret || jwtSecret.trim() === "" || jwtSecret === "your-secret-key") {
+      throw new Error(
+        "JWT_SECRET debe estar configurado en las variables de entorno (.env). " +
+        "No se puede usar un valor por defecto por razones de seguridad."
+      );
+    }
+    
+    return jwtSecret;
+  }
+
   // Función para generar token JWT
   generateToken(user) {
+    const jwtSecret = this.getJWTSecret();
     return jwt.sign(
       {
         id: user.id,
         username: user.username,
         isAdmin: user.isAdmin,
       },
-      process.env.JWT_SECRET || "your-secret-key",
+      jwtSecret,
       { expiresIn: "24h" }
     );
   }
@@ -74,8 +92,13 @@ class AuthService {
   // Función para verificar token JWT
   verifyToken(token) {
     try {
-      return jwt.verify(token, process.env.JWT_SECRET || "your-secret-key");
+      const jwtSecret = this.getJWTSecret();
+      return jwt.verify(token, jwtSecret);
     } catch (error) {
+      // Si el error es por JWT_SECRET no configurado, relanzar el error
+      if (error.message.includes("JWT_SECRET")) {
+        throw error;
+      }
       return null;
     }
   }

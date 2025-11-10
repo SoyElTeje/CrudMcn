@@ -14,7 +14,16 @@ const logger = require("../config/logger");
  */
 class AuthService {
   constructor() {
-    this.jwtSecret = process.env.JWT_SECRET || "your-secret-key";
+    // Validar que JWT_SECRET esté configurado
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret || jwtSecret.trim() === "" || jwtSecret === "your-secret-key") {
+      throw new Error(
+        "JWT_SECRET debe estar configurado en las variables de entorno (.env). " +
+        "No se puede usar un valor por defecto por razones de seguridad."
+      );
+    }
+    
+    this.jwtSecret = jwtSecret;
     this.jwtExpiresIn = process.env.JWT_EXPIRES_IN || "24h";
     this.bcryptRounds = 10;
   }

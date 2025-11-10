@@ -11,9 +11,9 @@ export default defineConfig(({ mode }) => ({
     },
   },
   server: {
-    host: "0.0.0.0", // Permite acceso desde red local
-    port: 5173,
-    strictPort: true,
+    host: process.env.VITE_HOST || "0.0.0.0", // Permite acceso desde red local
+    port: parseInt(process.env.VITE_PORT || "5173", 10),
+    strictPort: false, // Permitir usar otro puerto si el configurado está ocupado
   },
   build: {
     outDir: "dist",

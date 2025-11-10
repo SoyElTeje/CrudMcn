@@ -3,9 +3,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Pagination } from "./Pagination";
 import DateInput from "./ui/DateInput";
-// API configuration
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+import { API_BASE_URL } from "../config/api";
 
 interface LogEntry {
   Id: number;

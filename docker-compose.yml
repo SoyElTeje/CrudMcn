@@ -1,14 +1,16 @@
 version: "3.9"
 
 services:
+  # SQL Server para desarrollo
   sqlserver-dev:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: sqlserver-dev
     environment:
       ACCEPT_EULA: "Y"
-      SA_PASSWORD: "simpleDev!"
+      SA_PASSWORD: ${DB_SA_PASSWORD:-simpleDev!}
+      MSSQL_PID: Express
     ports:
-      - "1433:1433"
+      - "${DB_PORT:-1433}:1433"
     volumes:
       - sqlserver_data:/var/opt/mssql
     restart: unless-stopped

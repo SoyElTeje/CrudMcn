@@ -24,19 +24,22 @@ export default defineConfig({
     },
   },
   preview: {
-    port: 4173,
-    host: "0.0.0.0",
-    strictPort: true,
+    port: parseInt(process.env.VITE_PREVIEW_PORT || "4173", 10),
+    host: process.env.VITE_HOST || "0.0.0.0",
+    strictPort: false, // Permitir usar otro puerto si el configurado está ocupado
   },
   server: {
-    port: 4173,
-    host: "0.0.0.0",
-    strictPort: true,
+    port: parseInt(process.env.VITE_PREVIEW_PORT || "4173", 10),
+    host: process.env.VITE_HOST || "0.0.0.0",
+    strictPort: false, // Permitir usar otro puerto si el configurado está ocupado
   },
   define: {
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version || "1.0.0"),
   },
 });
+
+
+
 
 
 

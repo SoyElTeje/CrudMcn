@@ -55,6 +55,7 @@ if (fs.existsSync(envPath)) {
 }
 
 const app = express();
+// Puerto del servidor backend (configurable vía variable de entorno)
 const PORT = process.env.PORT || 3001;
 
 // Importar el servicio de autenticación para crear el admin por defecto
