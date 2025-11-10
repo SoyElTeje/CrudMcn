@@ -12,6 +12,11 @@ backend/.env.local
 backend/.env.development
 backend/.env.production
 backend/.env.staging
+# También archivos sin punto (env.production en lugar de .env.production)
+backend/env.production
+backend/env.local
+backend/env.development
+backend/env.staging
 
 # Frontend environment files
 frontend/.env
@@ -19,6 +24,11 @@ frontend/.env.local
 frontend/.env.development
 frontend/.env.production
 frontend/.env.staging
+# También archivos sin punto (env.production en lugar de .env.production)
+frontend/env.production
+frontend/env.local
+frontend/env.development
+frontend/env.staging
 
 # Environment templates (keep these in repo)
 # backend/env.development
