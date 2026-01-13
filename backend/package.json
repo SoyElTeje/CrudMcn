@@ -24,6 +24,8 @@
     "cron:setup": "node scripts/setup-cron.js",
     "assign-permissions": "node scripts/assign-permissions.js",
     "list-permissions": "node scripts/list-user-permissions.js",
+    "test-db": "node scripts/test-db-connection.js",
+    "verify-db": "node scripts/verify-db-connection.js",
     "pm2:start": "pm2 start ecosystem.config.js --env production",
     "pm2:stop": "pm2 stop abmmcn-backend",
     "pm2:restart": "pm2 restart abmmcn-backend",

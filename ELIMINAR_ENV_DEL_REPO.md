@@ -132,7 +132,13 @@ git push origin --force --all
 ```bash
 # Limpiar referencias obsoletas
 git reflog expire --expire=now --all
-git gc --prune=now --aggressive
+
+# Limpiar con respuesta automática "n" a las preguntas
+# (Windows Git Bash o WSL)
+yes n | head -20 | git gc --prune=now --aggressive
+
+# O alternativamente (si yes no está disponible):
+printf 'n\nn\nn\nn\nn\nn\nn\nn\nn\nn\nn\nn\nn\nn\nn\nn\nn\nn\nn\nn\n' | git gc --prune=now --aggressive
 ```
 
 ---
@@ -196,9 +202,9 @@ git commit -m "chore: eliminar archivos env.production del repo"
 git push origin --force --all
 git push origin --force --tags
 
-# 6. Limpiar
+# 6. Limpiar (con respuesta automática "n")
 git reflog expire --expire=now --all
-git gc --prune=now --aggressive
+yes n | head -20 | git gc --prune=now --aggressive
 ```
 
 ---

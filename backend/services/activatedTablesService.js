@@ -253,7 +253,8 @@ class ActivatedTablesService {
     try {
       const pool = await getPool();
 
-      const query = `
+      // Desactivar la tabla
+      const updateQuery = `
         UPDATE activated_tables 
         SET is_active = 0, updated_at = GETDATE()
         WHERE database_name = @databaseName AND table_name = @tableName
@@ -263,7 +264,27 @@ class ActivatedTablesService {
         .request()
         .input("databaseName", databaseName)
         .input("tableName", tableName)
-        .query(query);
+        .query(updateQuery);
+
+      // Eliminar todos los permisos de todos los usuarios sobre esta tabla específica
+      // Solo eliminar permisos específicos de tabla (table_name IS NOT NULL)
+      // No eliminar permisos a nivel de base de datos (table_name IS NULL)
+      const deletePermissionsQuery = `
+        DELETE FROM user_permissions 
+        WHERE database_name = @databaseName 
+          AND table_name = @tableName
+          AND table_name IS NOT NULL
+      `;
+
+      const deleteResult = await pool
+        .request()
+        .input("databaseName", databaseName)
+        .input("tableName", tableName)
+        .query(deletePermissionsQuery);
+
+      console.log(
+        `✅ Tabla ${databaseName}.${tableName} desactivada y permisos eliminados. Filas afectadas: ${deleteResult.rowsAffected[0]}`
+      );
 
       return true;
     } catch (error) {

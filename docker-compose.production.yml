@@ -2,6 +2,9 @@ version: "3.9"
 
 services:
   # Aplicación ABM McN
+  # NOTA: La base de datos SQL Server debe existir previamente en producción
+  # Configura las variables DB_SERVER, DB_USER, DB_PASSWORD, DB_DATABASE
+  # para conectarte a tu servidor SQL Server existente
   abmmcn-app:
     build:
       context: .
@@ -9,32 +12,35 @@ services:
       args:
         # Configurar la URL del backend para el frontend
         # IMPORTANTE: Ajustar según tu configuración
+        # Esta debe ser la URL donde los usuarios accederán al backend
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3001}
     container_name: abmmcn-app
     ports:
       - "${APP_PORT:-3001}:3001"
     environment:
-      # Base de datos
+      # Base de datos (SQL Server existente en producción)
+      # Configurar con los datos de tu servidor SQL Server existente
       DB_SERVER: ${DB_SERVER}
       DB_PORT: ${DB_PORT:-1433}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_DATABASE: ${DB_DATABASE}
-      
+
       # Servidor
       PORT: ${PORT:-3001}
       NODE_ENV: production
-      
+
       # CORS
+      # Configurar con los orígenes permitidos (separados por coma)
+      # Ejemplo: http://localhost:5173,https://tudominio.com
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
-      
-      # JWT (OBLIGATORIO)
+
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
-      
+
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      
+
       # Trial (opcional)
       TRIAL_DB: ${TRIAL_DB:-}
       TRIAL_TABLE: ${TRIAL_TABLE:-}
@@ -43,31 +49,16 @@ services:
       - ./backend/uploads:/app/backend/uploads
       - ./logs:/app/logs
     restart: unless-stopped
-    depends_on:
-      - sqlserver
-    networks:
-      - abmmcn-network
-
-  # SQL Server (solo si quieres incluirlo en Docker)
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: abmmcn-sqlserver
-    environment:
-      ACCEPT_EULA: "Y"
-      SA_PASSWORD: ${DB_SA_PASSWORD}
-      MSSQL_PID: ${MSSQL_PID:-Express}
-    ports:
-      - "${DB_PORT:-1433}:1433"
-    volumes:
-      - sqlserver_data:/var/opt/mssql
-    restart: unless-stopped
-    networks:
-      - abmmcn-network
-
-volumes:
-  sqlserver_data:
-
-networks:
-  abmmcn-network:
-    driver: bridge
-
+    # Health check para verificar que la aplicación está funcionando
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:3001/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

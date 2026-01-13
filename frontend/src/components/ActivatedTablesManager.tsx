@@ -252,7 +252,7 @@ const ActivatedTablesManager: React.FC = () => {
         }
       }
 
-      const response = await api.put(
+      await api.put(
         `/api/activated-tables/conditions/${databaseName}/${tableName}`,
         {
           conditions,

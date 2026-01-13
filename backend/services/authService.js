@@ -318,9 +318,9 @@ class AuthService {
       // Si el usuario es admin, tiene todos los permisos
       if (isAdmin) return true;
 
-      // Verificar permisos específicos de la base de datos
+      // Verificar permisos específicos de la base de datos (donde table_name IS NULL)
       const permissionQuery =
-        "SELECT * FROM USER_DATABASE_PERMISSIONS WHERE UserId = @userId AND DatabaseName = @databaseName";
+        "SELECT * FROM user_permissions WHERE user_id = @userId AND database_name = @databaseName AND table_name IS NULL";
       const permissionResult = await pool
         .request()
         .input("userId", userId)
@@ -338,6 +338,8 @@ class AuthService {
           return permission.can_write === 1 || permission.can_write === true;
         case "delete":
           return permission.can_delete === 1 || permission.can_delete === true;
+        case "create":
+          return permission.can_create === 1 || permission.can_create === true;
         default:
           return false;
       }
@@ -971,7 +973,7 @@ class AuthService {
         .query(query);
 
       if (result.recordset.length === 0) {
-        const hashedPassword = await bcrypt.hash("admin", 10);
+        const hashedPassword = await bcrypt.hash("Admin123!", 10);
         const insertQuery =
           "INSERT INTO users (username, password_hash, is_admin) VALUES (@username, @password, 1)";
         await pool

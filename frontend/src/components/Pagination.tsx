@@ -129,7 +129,7 @@ export function Pagination({
             variant={page === currentPage ? "outline" : "outline"}
             size="sm"
             onClick={() => onPageChange(page)}
-            className={`h-8 w-8 p-0 ${
+            className={`h-8 min-w-8 px-2 ${
               page === currentPage
                 ? "bg-[#447cd7] text-white border-[#447cd7] hover:bg-[#3a6bc4] hover:border-[#3a6bc4]"
                 : ""

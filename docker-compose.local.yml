@@ -1,0 +1,76 @@
+version: "3.9"
+
+services:
+  # Aplicación ABM McN para uso local
+  abmmcn-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # URL del backend (ajustar según tu necesidad)
+        # Para acceso local: http://localhost:3001
+        # Para acceso desde otra PC en la red: http://TU_IP_LOCAL:3001
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3001}
+    container_name: abmmcn-app
+    ports:
+      - "${APP_PORT:-3001}:3001"
+    environment:
+      # ============================================
+      # CONFIGURACIÓN DE BASE DE DATOS (OBLIGATORIO)
+      # ============================================
+      # Si la BD está en la misma PC (HOST):
+      #   - Windows/Mac: usar "host.docker.internal"
+      #   - Linux: usar la IP de la máquina (ej: 192.168.1.100)
+      # Si la BD está en otra PC/servidor:
+      #   - Usar la IP o hostname del servidor
+      DB_SERVER: ${DB_SERVER}
+      DB_PORT: ${DB_PORT:-1433}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_DATABASE: ${DB_DATABASE:-APPDATA}
+      
+      # ============================================
+      # CONFIGURACIÓN DEL SERVIDOR
+      # ============================================
+      PORT: ${PORT:-3001}
+      NODE_ENV: ${NODE_ENV:-production}
+      
+      # ============================================
+      # JWT (OBLIGATORIO - Generar un secret seguro)
+      # ============================================
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
+      
+      # ============================================
+      # CORS (Opcional - por defecto permite todo)
+      # ============================================
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      
+      # ============================================
+      # LOGGING (Opcional)
+      # ============================================
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      
+      # ============================================
+      # TRIAL (Opcional - para testing)
+      # ============================================
+      TRIAL_DB: ${TRIAL_DB:-}
+      TRIAL_TABLE: ${TRIAL_TABLE:-}
+    volumes:
+      # Persistir uploads y logs en la máquina host
+      - ./backend/uploads:/app/backend/uploads
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:3001/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+

@@ -28,22 +28,22 @@ Edita `.docker.env` con tus valores reales:
 
 ### 2. Construir y Ejecutar
 
-#### Opción A: Con SQL Server en Docker
+**NOTA**: Este docker-compose asume que la base de datos SQL Server ya existe en producción. Solo ejecuta la aplicación.
 
 ```bash
 # Construir la imagen de la aplicación
 docker-compose -f docker-compose.production.yml build
 
-# Iniciar todos los servicios
+# Iniciar la aplicación
 docker-compose -f docker-compose.production.yml --env-file .docker.env up -d
 
 # Ver logs
 docker-compose -f docker-compose.production.yml logs -f abmmcn-app
 ```
 
-#### Opción B: Solo la Aplicación (SQL Server externo)
+#### Alternativa: Usando Docker directamente
 
-Si tu SQL Server está en otro servidor, solo ejecuta la aplicación:
+Si prefieres usar Docker directamente sin docker-compose:
 
 ```bash
 # Construir
@@ -54,6 +54,9 @@ docker run -d \
   --name abmmcn-app \
   -p 3001:3001 \
   --env-file .docker.env \
+  -v $(pwd)/backend/uploads:/app/backend/uploads \
+  -v $(pwd)/logs:/app/logs \
+  --restart unless-stopped \
   abmmcn-app
 ```
 
@@ -111,20 +114,45 @@ docker exec -it abmmcn-app sh
 
 ## 🌐 Configuración de Red
 
-### Si usas SQL Server externo
+### Conexión a SQL Server existente
 
-Si tu SQL Server está en otro servidor (no en Docker), configura:
+La aplicación se conecta a un SQL Server existente en producción. Configura:
 
 ```env
 DB_SERVER=ip-o-hostname-del-servidor-sql
 DB_PORT=1433
+DB_USER=tu-usuario
+DB_PASSWORD=tu-contraseña
+DB_DATABASE=APPDATA
 ```
 
-Y asegúrate de que el contenedor pueda alcanzar ese servidor (misma red, firewall abierto, etc.).
+**⚠️ IMPORTANTE - Configuración de DB_SERVER para Docker:**
 
-### Si usas SQL Server en Docker
+Si la base de datos está en el **HOST** (fuera del contenedor):
+- **Windows/Mac**: Usa `host.docker.internal`
+  ```env
+  DB_SERVER=host.docker.internal
+  ```
+- **Linux**: Usa la IP del host o configura una red de Docker
+  ```env
+  DB_SERVER=192.168.1.100  # IP de tu host
+  ```
+  O configura una red de Docker personalizada.
 
-El docker-compose ya configura una red interna. El backend se conectará a `sqlserver:1433`.
+Si la base de datos está en **otro servidor**:
+- Usa la IP o dominio del servidor:
+  ```env
+  DB_SERVER=192.168.1.50  # IP del servidor SQL
+  # o
+  DB_SERVER=sql-server.tudominio.com  # Dominio del servidor SQL
+  ```
+
+**Importante**: Asegúrate de que:
+- El contenedor pueda alcanzar el servidor SQL Server (misma red, firewall abierto, etc.)
+- El puerto 1433 esté accesible desde el contenedor
+- Las credenciales sean correctas
+- La base de datos `APPDATA` exista en el servidor
+- SQL Server permita conexiones remotas (si está en otro servidor)
 
 ## 🔒 Seguridad
 
@@ -143,6 +171,17 @@ Usa:
 ```bash
 node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 ```
+
+**⚠️ IMPORTANTE - Caracteres especiales en JWT_SECRET:**
+
+Si tu `JWT_SECRET` contiene el carácter `$`, necesitas escaparlo con `$$` en el archivo `.docker.env`:
+
+```env
+# Si tu JWT_SECRET contiene $VAR, escríbelo como $$VAR
+JWT_SECRET='tu-secret-con-$$VAR-aqui'
+```
+
+Esto es porque Docker Compose interpreta `$` como el inicio de una variable de entorno. Al usar `$$`, Docker Compose lo convertirá en un `$` literal cuando lo pase al contenedor.
 
 ### Contraseñas de Base de Datos
 
@@ -164,16 +203,44 @@ Usa contraseñas fuertes y únicas. No uses valores por defecto en producción.
 
 ### No se puede conectar a SQL Server
 
-1. Verifica que SQL Server esté accesible:
+**Error común**: `Failed to connect to localhost:1433`
+
+Este error ocurre cuando `DB_SERVER=localhost` en Docker. En Docker, `localhost` se refiere al contenedor mismo, no al host.
+
+**Solución**:
+1. Si la base de datos está en el **HOST** (Windows/Mac):
+   ```env
+   DB_SERVER=host.docker.internal
+   ```
+2. Si la base de datos está en el **HOST** (Linux):
+   ```env
+   DB_SERVER=192.168.1.100  # IP de tu host
+   ```
+3. Si la base de datos está en **otro servidor**:
+   ```env
+   DB_SERVER=ip-o-dominio-del-servidor-sql
+   ```
+
+**Verificación**:
+1. Verifica que SQL Server esté accesible desde el contenedor:
    ```bash
    # Desde el contenedor
    docker exec -it abmmcn-app sh
-   nc -zv DB_SERVER 1433
+   # Instalar netcat si no está disponible
+   apk add --no-cache netcat-openbsd
+   # Probar conexión
+   nc -zv ${DB_SERVER} ${DB_PORT:-1433}
    ```
 
-2. Verifica firewall y reglas de red
+2. Verifica firewall y reglas de red:
+   - El puerto 1433 debe estar abierto en el servidor SQL Server
+   - El firewall debe permitir conexiones desde la IP del contenedor
 
-3. Si SQL Server está en Docker, verifica que esté en la misma red
+3. Verifica las credenciales en `.docker.env`:
+   - `DB_SERVER`: IP o hostname del servidor SQL Server
+   - `DB_USER`: Usuario con permisos en la base de datos
+   - `DB_PASSWORD`: Contraseña correcta
+   - `DB_DATABASE`: Nombre de la base de datos (debe existir)
 
 ### El frontend no carga
 

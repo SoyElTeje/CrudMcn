@@ -26,11 +26,26 @@ class DatabaseConfig {
   getPoolConfig() {
     const environment = process.env.NODE_ENV || "development";
 
+    // Validar que las variables de entorno requeridas estén configuradas
+    if (!process.env.DB_SERVER || process.env.DB_SERVER.trim() === "") {
+      throw new Error(
+        "DB_SERVER debe estar configurado en las variables de entorno. " +
+        "Para Docker, usa 'host.docker.internal' (Windows/Mac) o la IP del host (Linux) " +
+        "si la base de datos está en el host."
+      );
+    }
+    if (!process.env.DB_USER || process.env.DB_USER.trim() === "") {
+      throw new Error("DB_USER debe estar configurado en las variables de entorno");
+    }
+    if (!process.env.DB_PASSWORD || process.env.DB_PASSWORD.trim() === "") {
+      throw new Error("DB_PASSWORD debe estar configurado en las variables de entorno");
+    }
+
     const baseConfig = {
-      server: process.env.DB_SERVER,
+      server: process.env.DB_SERVER.trim(),
       port: parseInt(process.env.DB_PORT, 10) || 1433,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
+      user: process.env.DB_USER.trim(),
+      password: process.env.DB_PASSWORD.trim(),
       options: {
         encrypt: process.env.DB_ENCRYPT === "true",
         trustServerCertificate: process.env.DB_TRUST_CERT === "true",

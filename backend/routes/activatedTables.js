@@ -127,6 +127,7 @@ router.post(
 );
 
 // Desactivar una tabla (solo admin)
+// Soporta tanto POST con parámetros en URL como PUT con body
 router.post(
   "/deactivate/:databaseName/:tableName",
   authenticateToken,
@@ -134,6 +135,35 @@ router.post(
   validate(schemas.databaseTableParams, "params"),
   catchAsync(async (req, res) => {
     const { databaseName, tableName } = req.params;
+
+    await activatedTablesService.deactivateTable(databaseName, tableName);
+
+    logger.crud("DELETE", "activated_tables", {
+      adminId: req.user.id,
+      databaseName,
+      tableName,
+    });
+
+    res.json({
+      success: true,
+      message: "Tabla desactivada correctamente",
+    });
+  })
+);
+
+// Endpoint alternativo para desactivar tabla usando PUT con body (para compatibilidad con frontend)
+router.put(
+  "/deactivate",
+  authenticateToken,
+  requireAdmin,
+  catchAsync(async (req, res) => {
+    const { databaseName, tableName } = req.body;
+
+    if (!databaseName || !tableName) {
+      return res.status(400).json({
+        error: "databaseName y tableName son requeridos",
+      });
+    }
 
     await activatedTablesService.deactivateTable(databaseName, tableName);
 
